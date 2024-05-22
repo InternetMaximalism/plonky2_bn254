@@ -17,7 +17,7 @@ use crate::starks::{
         pol_utils::pol_remove_root_2exp,
         utils::{bigint_to_columns, columns_to_bigint},
     },
-    UnmoddedValue, LIMB_BITS, N_LIMBS, U256,
+    LIMB_BITS, N_LIMBS, U256,
 };
 
 use super::pol_utils::{
@@ -32,8 +32,8 @@ pub(crate) const MODULUS_AUX_ZERO_LEN: usize = 5 * N_LIMBS;
 /// Auxiliary information to ensure that the given number is divisible by the modulus
 /// Each field except `quot_abs` is subject to range checks of 0 <= x < 2^16
 #[repr(C)]
-#[derive(Default, Clone, Copy, Debug)]
-pub(crate) struct ModulusAuxZero<F> {
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ModulusZeroAux<F> {
     pub(crate) quot_sign: F,
     pub(crate) quot_abs: [F; N_LIMBS + 1],
     pub(crate) aux_input_lo: [F; 2 * N_LIMBS - 1],
@@ -42,11 +42,11 @@ pub(crate) struct ModulusAuxZero<F> {
 
 /// Generate auxiliary information to ensure that the given `zero_value`
 /// is divisible by the modulus
-pub(crate) fn generate_modular_zero<F: PrimeField64>(
+pub(crate) fn generate_modulus_zero<F: PrimeField64>(
     modulus: &BigInt,
-    zero_value: &UnmoddedValue<i64>,
-) -> ModulusAuxZero<F> {
-    let input = columns_to_bigint(&zero_value.value);
+    zero_value: &[i64; 2 * N_LIMBS - 1],
+) -> ModulusZeroAux<F> {
+    let input = columns_to_bigint(&zero_value);
     debug_assert!(&input % modulus == BigInt::zero());
     let modulus_limbs = bigint_to_columns(modulus);
     let quot = &input / modulus;
@@ -59,7 +59,7 @@ pub(crate) fn generate_modular_zero<F: PrimeField64>(
     let quot_abs_limbs = bigint_to_columns::<{ N_LIMBS + 1 }>(&quot.abs());
     // constr_poly = zero_pol  - s(x)*m(x).
     let mut constr_poly = [0i64; 2 * N_LIMBS];
-    constr_poly[..2 * N_LIMBS - 1].copy_from_slice(&zero_value.value);
+    constr_poly[..2 * N_LIMBS - 1].copy_from_slice(zero_value);
     let prod: [i64; 2 * N_LIMBS] = pol_mul_wide2(quot_limbs, modulus_limbs);
     pol_sub_assign(&mut constr_poly, &prod);
     // aux_limbs = constr/(x- β)
@@ -78,7 +78,7 @@ pub(crate) fn generate_modular_zero<F: PrimeField64>(
         .map(|&c| F::from_canonical_u16((c >> LIMB_BITS) as u16))
         .collect_vec();
     let quot_abs = quot_abs_limbs.map(|x| F::from_canonical_i64(x));
-    ModulusAuxZero {
+    ModulusZeroAux {
         quot_sign,
         quot_abs,
         aux_input_lo: aux_input_lo.try_into().unwrap(),
@@ -87,12 +87,12 @@ pub(crate) fn generate_modular_zero<F: PrimeField64>(
 }
 
 /// Evaluate the constraint that the given `input` is divisible by the modulus
-pub(crate) fn eval_modular_zero<P: PackedField>(
+pub(crate) fn eval_modulus_zero<P: PackedField>(
     yield_constr: &mut ConstraintConsumer<P>,
     filter: P,
     modulus: U256<P>,
-    input: UnmoddedValue<P>,
-    aux: ModulusAuxZero<P>,
+    input: [P; 2 * N_LIMBS - 1],
+    aux: ModulusZeroAux<P>,
 ) {
     // validate quot_sign
     yield_constr.constraint(filter * (aux.quot_sign * aux.quot_sign - P::ONES));
@@ -115,21 +115,21 @@ pub(crate) fn eval_modular_zero<P: PackedField>(
             *c = aux.aux_input_lo[i] - offset;
             *c += base * aux.aux_input_hi[i];
         });
-
     pol_add_assign(&mut constr_poly, &pol_adjoin_root(aux_poly, base));
-    pol_sub_assign(&mut constr_poly, &input.value);
+
+    pol_sub_assign(&mut constr_poly, &input);
     for &c in constr_poly.iter() {
         yield_constr.constraint(filter * c);
     }
 }
 
-pub(crate) fn eval_modular_zero_circuit<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn eval_modulus_zero_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     yield_constr: &mut RecursiveConstraintConsumer<F, D>,
     filter: ExtensionTarget<D>,
     modulus: U256<ExtensionTarget<D>>,
-    input: UnmoddedValue<ExtensionTarget<D>>,
-    aux: ModulusAuxZero<ExtensionTarget<D>>,
+    input: [ExtensionTarget<D>; 2 * N_LIMBS - 1],
+    aux: ModulusZeroAux<ExtensionTarget<D>>,
 ) {
     // validate quot_sign
     let one = builder.one_extension();
@@ -164,7 +164,7 @@ pub(crate) fn eval_modular_zero_circuit<F: RichField + Extendable<D>, const D: u
     pol_add_assign_ext_circuit(builder, &mut constr_poly, &t);
 
     // q(x) * m(x) + (x - β) * s(x) - zero_pol = 0
-    pol_sub_assign_ext_circuit(builder, &mut constr_poly, &input.value);
+    pol_sub_assign_ext_circuit(builder, &mut constr_poly, &input);
     for &c in constr_poly.iter() {
         let t = builder.mul_extension(filter, c);
         yield_constr.constraint(builder, t);
