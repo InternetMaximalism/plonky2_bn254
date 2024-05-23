@@ -2,8 +2,12 @@ use crate::starks::{
     modular::{
         is_modulus_zero::{
             eval_is_modulus_zero, eval_is_modulus_zero_circuit, generate_is_modulus_zero,
+            IsModulusZeroAux, IS_MODULUS_AUX_ZERO_LEN,
         },
-        modulus_zero::{eval_modulus_zero, eval_modulus_zero_circuit, generate_modulus_zero},
+        modulus_zero::{
+            eval_modulus_zero, eval_modulus_zero_circuit, generate_modulus_zero, ModulusZeroAux,
+            MODULUS_AUX_ZERO_LEN,
+        },
         pol_utils::{
             pol_add, pol_add_ext_circuit, pol_add_normal, pol_add_normal_ext_circuit,
             pol_mul_scalar, pol_mul_scalar_ext_circuit, pol_mul_wide, pol_mul_wide_ext_circuit,
@@ -11,7 +15,7 @@ use crate::starks::{
         },
     },
     utils::bn254_base_modulus_bigint,
-    U256,
+    N_LIMBS, U256,
 };
 use ark_bn254::{Fq, G1Affine};
 use plonky2::{
@@ -22,8 +26,25 @@ use plonky2::{
 };
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
-use super::{G1AddAux, G1};
+use super::G1;
 
+pub(crate) const G1_ADD_AUX_LEN: usize =
+    1 + IS_MODULUS_AUX_ZERO_LEN + 1 + N_LIMBS + 3 * MODULUS_AUX_ZERO_LEN;
+
+/// Auxiliary information for the addition of two G1 points
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct G1AddAux<T: Copy + Clone + Default> {
+    pub(crate) is_x_eq: T,
+    pub(crate) is_x_eq_aux: IsModulusZeroAux<T>,
+    pub(crate) is_x_eq_filter: T, // is_x_eq_filter = is_x_eq * filter
+    pub(crate) lambda: U256<T>,
+    pub(crate) lambda_aux: ModulusZeroAux<T>,
+    pub(crate) x_aux: ModulusZeroAux<T>,
+    pub(crate) y_aux: ModulusZeroAux<T>,
+}
+
+/// Generate the result of adding two G1 points and auxiliary information
 pub(crate) fn generate_g1_add<F: RichField>(a: G1<F>, b: G1<F>) -> (G1<F>, G1AddAux<F>) {
     let modulus = bn254_base_modulus_bigint();
     let a_ark: G1Affine = a.into();
@@ -93,6 +114,7 @@ pub(crate) fn generate_g1_add<F: RichField>(a: G1<F>, b: G1<F>) -> (G1<F>, G1Add
     (c, aux)
 }
 
+/// Evaluate the constraint that the sum of two G1 points is a third G1 point
 pub(crate) fn eval_g1_add<P: PackedField>(
     yield_constr: &mut ConstraintConsumer<P>,
     filter: P,
@@ -231,7 +253,7 @@ mod tests {
 
     use super::*;
     use crate::starks::{
-        curves::g1::{G1AddAux, G1, G1_ADD_AUX_LEN, G1_LEN},
+        curves::g1::{G1, G1_LEN},
         utils::{bn254_base_modulus_extension_target, bn254_base_modulus_packfield},
     };
     use ark_bn254::G1Affine;
@@ -261,9 +283,13 @@ mod tests {
     fn g1_add_stark() {
         let mut rng = rand::thread_rng();
         let input = (0..256)
-            .map(|_| {
+            .map(|i| {
                 let a = G1Affine::rand(&mut rng);
-                let b = G1Affine::rand(&mut rng);
+                let b = if i % 2 == 0 {
+                    G1Affine::rand(&mut rng)
+                } else {
+                    a.clone()
+                };
                 (a, b)
             })
             .collect::<Vec<_>>();

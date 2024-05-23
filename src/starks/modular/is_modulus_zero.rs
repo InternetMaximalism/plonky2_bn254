@@ -1,5 +1,5 @@
 use ark_bn254::Fq;
-use num::{BigInt, BigUint, One as _, Zero as _};
+use num::{BigInt, One as _, Zero as _};
 use plonky2::{
     field::{extension::Extendable, packed::PackedField, types::PrimeField64},
     hash::hash_types::RichField,
@@ -10,9 +10,7 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 
 use crate::starks::{
     modular::{
-        modulus_zero::generate_modulus_zero,
-        pol_utils::{pol_mul_wide, pol_sub_normal},
-        utils::columns_to_bigint,
+        modulus_zero::generate_modulus_zero, pol_utils::pol_mul_wide, utils::columns_to_bigint,
     },
     N_LIMBS, U256,
 };

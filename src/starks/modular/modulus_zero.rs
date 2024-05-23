@@ -34,7 +34,7 @@ pub(crate) const MODULUS_AUX_ZERO_LEN: usize = 5 * N_LIMBS;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ModulusZeroAux<F> {
-    pub(crate) quot_sign: F,
+    pub(crate) is_quot_positive: F,
     pub(crate) quot_abs: [F; N_LIMBS + 1],
     pub(crate) aux_input_lo: [F; 2 * N_LIMBS - 1],
     pub(crate) aux_input_hi: [F; 2 * N_LIMBS - 1],
@@ -50,9 +50,9 @@ pub(crate) fn generate_modulus_zero<F: PrimeField64>(
     debug_assert!(&input_bg % modulus == BigInt::zero());
     let modulus_limbs = bigint_to_columns(modulus);
     let quot = &input_bg / modulus;
-    let quot_sign = match quot.sign() {
-        Sign::Minus => F::NEG_ONE,
-        Sign::NoSign => F::ONE, // if quot == 0 then quot_sign == 1
+    let is_quot_positive = match quot.sign() {
+        Sign::Minus => F::ZERO,
+        Sign::NoSign => F::ZERO,
         Sign::Plus => F::ONE,
     };
     let quot_limbs = bigint_to_columns::<{ N_LIMBS + 1 }>(&quot);
@@ -79,7 +79,7 @@ pub(crate) fn generate_modulus_zero<F: PrimeField64>(
         .collect_vec();
     let quot_abs = quot_abs_limbs.map(|x| F::from_canonical_i64(x));
     ModulusZeroAux {
-        quot_sign,
+        is_quot_positive,
         quot_abs,
         aux_input_lo: aux_input_lo.try_into().unwrap(),
         aux_input_hi: aux_input_hi.try_into().unwrap(),
@@ -94,12 +94,13 @@ pub(crate) fn eval_modulus_zero<P: PackedField>(
     input: [P; 2 * N_LIMBS - 1],
     aux: ModulusZeroAux<P>,
 ) {
-    // validate quot_sign
-    yield_constr.constraint(filter * (aux.quot_sign * aux.quot_sign - P::ONES));
+    yield_constr
+        .constraint(filter * (aux.is_quot_positive * aux.is_quot_positive - aux.is_quot_positive));
+    let quot_sign = P::Scalar::TWO * aux.is_quot_positive - P::ONES;
     let quot = aux
         .quot_abs
         .iter()
-        .map(|&limb| aux.quot_sign * limb)
+        .map(|&limb| quot_sign * limb)
         .collect_vec();
     // constr_poly = q(x) * m(x)
     let mut constr_poly: [_; 2 * N_LIMBS] = pol_mul_wide2(quot.try_into().unwrap(), modulus.value);
@@ -132,15 +133,22 @@ pub(crate) fn eval_modulus_zero_circuit<F: RichField + Extendable<D>, const D: u
     aux: ModulusZeroAux<ExtensionTarget<D>>,
 ) {
     // validate quot_sign
-    let one = builder.one_extension();
-    let diff = builder.mul_sub_extension(aux.quot_sign, aux.quot_sign, one);
-    let t = builder.mul_extension(filter, diff);
-    yield_constr.constraint(builder, t);
+    // t = is_quot_positive^2 - is_quot_positive
+    let t = builder.mul_sub_extension(
+        aux.is_quot_positive,
+        aux.is_quot_positive,
+        aux.is_quot_positive,
+    );
+    let t_filtered = builder.mul_extension(filter, t);
+    yield_constr.constraint(builder, t_filtered);
 
+    let one = builder.constant_extension(F::Extension::ONE);
+    let two = builder.constant_extension(F::Extension::TWO);
+    let quot_sign = builder.mul_sub_extension(two, aux.is_quot_positive, one);
     let quot = aux
         .quot_abs
         .iter()
-        .map(|&limb| builder.mul_extension(aux.quot_sign, limb))
+        .map(|&limb| builder.mul_extension(quot_sign, limb))
         .collect_vec();
 
     // constr_poly = q(x) * m(x)
