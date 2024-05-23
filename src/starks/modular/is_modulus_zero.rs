@@ -18,12 +18,16 @@ use crate::starks::{
 };
 
 use super::{
-    modulus_zero::{eval_modulus_zero, eval_modulus_zero_circuit, ModulusZeroAux},
+    modulus_zero::{
+        eval_modulus_zero, eval_modulus_zero_circuit, ModulusZeroAux, MODULUS_AUX_ZERO_LEN,
+    },
     pol_utils::{pol_mul_scalar, pol_mul_scalar_ext_circuit, pol_mul_wide_ext_circuit},
 };
 
+pub(crate) const IS_MODULUS_AUX_ZERO_LEN: usize = N_LIMBS + MODULUS_AUX_ZERO_LEN;
+
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct IsModulusZeroAux<F> {
     pub(crate) inv: U256<F>,
     pub(crate) modulus_zero_aux: ModulusZeroAux<F>,

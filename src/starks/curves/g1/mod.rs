@@ -2,12 +2,17 @@ use ark_bn254::{Fq, G1Affine};
 use plonky2::hash::hash_types::RichField;
 
 use crate::starks::{
-    modular::{is_modulus_zero::IsModulusZeroAux, modulus_zero::ModulusZeroAux},
-    U256,
+    modular::{
+        is_modulus_zero::{IsModulusZeroAux, IS_MODULUS_AUX_ZERO_LEN},
+        modulus_zero::{ModulusZeroAux, MODULUS_AUX_ZERO_LEN},
+    },
+    N_LIMBS, U256,
 };
 pub mod add;
 
-#[derive(Clone, Copy)]
+pub(crate) const G1_LEN: usize = 2 * N_LIMBS;
+
+#[derive(Clone, Copy, Default)]
 pub(crate) struct G1<T: Copy + Clone + Default> {
     pub(crate) x: U256<T>,
     pub(crate) y: U256<T>,
@@ -39,9 +44,14 @@ impl<F: RichField> G1<F> {
     }
 }
 
+pub(crate) const G1_ADD_AUX_LEN: usize =
+    1 + IS_MODULUS_AUX_ZERO_LEN + 1 + N_LIMBS + 3 * MODULUS_AUX_ZERO_LEN;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct G1AddAux<T: Copy + Clone + Default> {
     pub(crate) is_x_eq: T,
     pub(crate) is_x_eq_aux: IsModulusZeroAux<T>,
+    pub(crate) is_x_eq_filter: T, // is_x_eq_filter = is_x_eq * filter
     pub(crate) lambda: U256<T>,
     pub(crate) lambda_aux: ModulusZeroAux<T>,
     pub(crate) x_aux: ModulusZeroAux<T>,

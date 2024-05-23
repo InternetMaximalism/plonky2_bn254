@@ -70,25 +70,29 @@ pub(crate) fn pol_add_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     sum
 }
 
-pub(crate) fn pol_add_normal<T>(a: [T; N_LIMBS], b: [T; N_LIMBS]) -> [T; N_LIMBS]
+pub(crate) fn pol_add_normal<T, const N: usize>(a: [T; N], b: [T; N]) -> [T; N]
 where
     T: Add<Output = T> + Copy + Default,
 {
     let mut sum = pol_zero();
-    for i in 0..N_LIMBS {
+    for i in 0..N {
         sum[i] = a[i] + b[i];
     }
     sum
 }
 
-pub(crate) fn pol_add_normal_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn pol_add_normal_ext_circuit<
+    F: RichField + Extendable<D>,
+    const D: usize,
+    const N: usize,
+>(
     builder: &mut CircuitBuilder<F, D>,
-    a: [ExtensionTarget<D>; N_LIMBS],
-    b: [ExtensionTarget<D>; N_LIMBS],
-) -> [ExtensionTarget<D>; N_LIMBS] {
+    a: [ExtensionTarget<D>; N],
+    b: [ExtensionTarget<D>; N],
+) -> [ExtensionTarget<D>; N] {
     let zero = builder.zero_extension();
-    let mut sum = [zero; N_LIMBS];
-    for i in 0..N_LIMBS {
+    let mut sum = [zero; N];
+    for i in 0..N {
         sum[i] = builder.add_extension(a[i], b[i]);
     }
     sum

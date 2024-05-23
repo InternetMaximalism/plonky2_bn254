@@ -32,7 +32,7 @@ pub(crate) const MODULUS_AUX_ZERO_LEN: usize = 5 * N_LIMBS;
 /// Auxiliary information to ensure that the given number is divisible by the modulus
 /// Each field except `quot_abs` is subject to range checks of 0 <= x < 2^16
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ModulusZeroAux<F> {
     pub(crate) quot_sign: F,
     pub(crate) quot_abs: [F; N_LIMBS + 1],
