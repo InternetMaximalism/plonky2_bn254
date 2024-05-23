@@ -1,7 +1,10 @@
 use ark_bn254::{Fq, G1Affine};
 use plonky2::hash::hash_types::RichField;
 
-use crate::starks::{modular::modular_zero::ModulusZeroAux, U256};
+use crate::starks::{
+    modular::{is_modulus_zero::IsModulusZeroAux, modulus_zero::ModulusZeroAux},
+    U256,
+};
 pub mod add;
 
 #[derive(Clone, Copy)]
@@ -36,7 +39,9 @@ impl<F: RichField> G1<F> {
     }
 }
 
-pub(crate) struct G1Aux<T: Copy + Clone + Default> {
+pub(crate) struct G1AddAux<T: Copy + Clone + Default> {
+    pub(crate) is_x_eq: T,
+    pub(crate) is_x_eq_aux: IsModulusZeroAux<T>,
     pub(crate) lambda: U256<T>,
     pub(crate) lambda_aux: ModulusZeroAux<T>,
     pub(crate) x_aux: ModulusZeroAux<T>,

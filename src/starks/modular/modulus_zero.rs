@@ -40,16 +40,16 @@ pub(crate) struct ModulusZeroAux<F> {
     pub(crate) aux_input_hi: [F; 2 * N_LIMBS - 1],
 }
 
-/// Generate auxiliary information to ensure that the given `zero_value`
+/// Generate auxiliary information to ensure that the given `input`
 /// is divisible by the modulus
 pub(crate) fn generate_modulus_zero<F: PrimeField64>(
     modulus: &BigInt,
-    zero_value: &[i64; 2 * N_LIMBS - 1],
+    input: &[i64; 2 * N_LIMBS - 1],
 ) -> ModulusZeroAux<F> {
-    let input = columns_to_bigint(&zero_value);
-    debug_assert!(&input % modulus == BigInt::zero());
+    let input_bg = columns_to_bigint(&input);
+    debug_assert!(&input_bg % modulus == BigInt::zero());
     let modulus_limbs = bigint_to_columns(modulus);
-    let quot = &input / modulus;
+    let quot = &input_bg / modulus;
     let quot_sign = match quot.sign() {
         Sign::Minus => F::NEG_ONE,
         Sign::NoSign => F::ONE, // if quot == 0 then quot_sign == 1
@@ -59,7 +59,7 @@ pub(crate) fn generate_modulus_zero<F: PrimeField64>(
     let quot_abs_limbs = bigint_to_columns::<{ N_LIMBS + 1 }>(&quot.abs());
     // constr_poly = zero_pol  - s(x)*m(x).
     let mut constr_poly = [0i64; 2 * N_LIMBS];
-    constr_poly[..2 * N_LIMBS - 1].copy_from_slice(zero_value);
+    constr_poly[..2 * N_LIMBS - 1].copy_from_slice(input);
     let prod: [i64; 2 * N_LIMBS] = pol_mul_wide2(quot_limbs, modulus_limbs);
     pol_sub_assign(&mut constr_poly, &prod);
     // aux_limbs = constr/(x- β)

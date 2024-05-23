@@ -263,6 +263,34 @@ pub(crate) fn pol_mul_lo_ext_circuit<F: RichField + Extendable<D>, const D: usiz
     res
 }
 
+pub(crate) fn pol_mul_scalar<T, const N: usize>(a: [T; N], c: T) -> [T; N]
+where
+    T: Mul<Output = T> + Copy + Default,
+{
+    let mut muled = pol_zero();
+    for i in 0..N {
+        muled[i] = c * a[i];
+    }
+    muled
+}
+
+pub(crate) fn pol_mul_scalar_ext_circuit<
+    F: RichField + Extendable<D>,
+    const D: usize,
+    const N: usize,
+>(
+    builder: &mut CircuitBuilder<F, D>,
+    a: [ExtensionTarget<D>; N],
+    c: ExtensionTarget<D>,
+) -> [ExtensionTarget<D>; N] {
+    let zero = builder.zero_extension();
+    let mut res = [zero; N];
+    for i in 0..N {
+        res[i] = builder.mul_extension(a[i], c);
+    }
+    res
+}
+
 /// Adjoin M - N zeros to a, returning [a[0], a[1], ..., a[N-1], 0, 0, ..., 0].
 pub(crate) fn pol_extend<T, const N: usize, const M: usize>(a: [T; N]) -> [T; M]
 where
