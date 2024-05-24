@@ -380,20 +380,3 @@ where
     }
     q
 }
-
-/// Read the range `value_idxs` of values from `lv` into an array of
-/// length `N`. Panics if the length of the range is not `N`.
-pub(crate) fn read_value<const N: usize, T: Copy>(lv: &[T], value_idxs: Range<usize>) -> [T; N] {
-    lv[value_idxs].try_into().unwrap()
-}
-
-/// Read the range `value_idxs` of values from `lv` into an array of
-/// length `N`, interpreting the values as `i64`s. Panics if the
-/// length of the range is not `N`.
-pub(crate) fn read_value_i64_limbs<const N: usize, F: PrimeField64>(
-    lv: &[F],
-    value_idxs: Range<usize>,
-) -> [i64; N] {
-    let limbs: [_; N] = lv[value_idxs].try_into().unwrap();
-    limbs.map(|c| c.to_canonical_u64() as i64)
-}
