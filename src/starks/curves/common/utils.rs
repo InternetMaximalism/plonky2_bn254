@@ -26,3 +26,15 @@ pub(crate) fn le_bits_to_biguint(bits: &[bool]) -> BigUint {
     }
     BigUint::from_bytes_le(&limbs)
 }
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use num::BigUint;
+    use rand::Rng;
+
+    pub(crate) fn random_biguint<R: Rng>(rng: &mut R) -> BigUint {
+        let mut bytes = [0u8; 32];
+        rng.fill(&mut bytes);
+        BigUint::from_bytes_le(&bytes)
+    }
+}

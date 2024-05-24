@@ -14,7 +14,7 @@ pub mod scalar_mul_view;
 
 pub(crate) const G1_LEN: usize = 2 * N_LIMBS;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct G1<T: Copy + Clone + Default> {
     pub(crate) x: U256<T>,
     pub(crate) y: U256<T>,
