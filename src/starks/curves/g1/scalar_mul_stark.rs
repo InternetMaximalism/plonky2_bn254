@@ -10,6 +10,7 @@ use plonky2::{
 };
 use starky::{
     evaluation_frame::{StarkEvaluationFrame, StarkFrame},
+    lookup::{Column, Lookup},
     stark::Stark,
     util::trace_rows_to_poly_values,
 };
@@ -17,18 +18,20 @@ use starky::{
 use crate::starks::{
     curves::{
         common::{
-            eq::EvalEq,
-            round_flags::{eval_round_flags, generate_round_flags},
+            eq::{EvalEq, EvalEqCircuit},
+            round_flags::{eval_round_flags, eval_round_flags_circuit, generate_round_flags},
             utils::biguint_to_le_bits,
         },
-        g1::scalar_mul_view::N_BITS,
+        g1::scalar_mul_view::{NUM_RANGE_CHECK_COLS, N_BITS},
     },
-    utils::bn254_base_modulus_packfield,
+    utils::{bn254_base_modulus_extension_target, bn254_base_modulus_packfield},
 };
 
 use super::{
-    add::{eval_g1_add, generate_g1_add, G1AddAux},
-    scalar_mul_view::{G1ScalarMulView, G1_SCALAR_MUL_VIEW_LEN},
+    add::{eval_g1_add, eval_g1_add_circuit, generate_g1_add, G1AddAux},
+    scalar_mul_view::{
+        G1ScalarMulView, FREQ_COL, G1_SCALAR_MUL_VIEW_LEN, RANGE_CHECK_COLS, RANGE_COUNTER_COL,
+    },
 };
 
 pub(crate) struct G1ScalarMulInput {
@@ -62,8 +65,26 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
         }
         let default_row = [F::ZERO; G1_SCALAR_MUL_VIEW_LEN];
         rows.resize(num_rows, default_row);
-        // todo: generate range checks
+        self.generate_range_checks(&mut rows);
         trace_rows_to_poly_values(rows)
+    }
+
+    fn generate_range_checks(&self, rows: &mut Vec<[F; G1_SCALAR_MUL_VIEW_LEN]>) {
+        let range_max = 1 << 16;
+        for (index, row) in rows.iter_mut().enumerate() {
+            if index < range_max {
+                row[RANGE_COUNTER_COL] = F::from_canonical_usize(index);
+            } else {
+                row[RANGE_COUNTER_COL] = F::from_canonical_usize(range_max - 1);
+            }
+        }
+        for row_index in 0..rows.len() {
+            for col_index in RANGE_CHECK_COLS {
+                let x = rows[row_index][col_index].to_canonical_u64() as usize;
+                assert!(x < range_max);
+                rows[x][FREQ_COL] += F::ONE;
+            }
+        }
     }
 
     // Generate one set of trace of the scalar multiplication
@@ -189,8 +210,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
 
         // bit rotation
         for i in 0..N_BITS {
-            yield_constr
-                .constraint(is_not_last_round * (next.bits[i] - local.bits[(i + 1) % N_BITS]));
+            next.bits[i].eval_eq(
+                yield_constr,
+                is_not_last_round,
+                &local.bits[(i + 1) % N_BITS],
+            );
         }
 
         // round_flags
@@ -205,6 +229,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         // timestamp
         next.timestamp
             .eval_eq(yield_constr, is_not_last_round, &local.timestamp);
+
+        // filter transition
+        next.filter
+            .eval_eq(yield_constr, is_not_last_round, &local.filter);
 
         // double
         eval_g1_add(
@@ -239,7 +267,79 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         vars: &Self::EvaluationFrameTarget,
         yield_constr: &mut starky::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        todo!()
+        let modulus = bn254_base_modulus_extension_target(builder);
+        let local = G1ScalarMulView::from_slice(vars.get_local_values());
+        let next = G1ScalarMulView::from_slice(vars.get_next_values());
+
+        // is_last_round is "filtered". In other words, `is_last_round` is affected by the factor of the filter.
+        // Therefore, `filter - is_last_round`` becomes "filtered" version of `1 - is_last_round`.
+        let is_not_last_round =
+            builder.sub_extension(local.filter, local.round_flags.is_last_round);
+
+        // bit rotation
+        for i in 0..N_BITS {
+            next.bits[i].eval_eq_circuit(
+                builder,
+                yield_constr,
+                is_not_last_round,
+                &local.bits[(i + 1) % N_BITS],
+            );
+        }
+
+        // round_flags
+        eval_round_flags_circuit(
+            builder,
+            yield_constr,
+            N_BITS,
+            local.filter,
+            local.round_flags,
+            next.round_flags.counter,
+        );
+
+        // timestamp
+        next.timestamp
+            .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.timestamp);
+
+        // filter transition
+        next.filter
+            .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.filter);
+
+        // double
+        eval_g1_add_circuit(
+            builder,
+            yield_constr,
+            is_not_last_round,
+            modulus,
+            local.double,
+            local.double,
+            next.double,
+            next.double_aux,
+        );
+
+        // sum
+        eval_g1_add_circuit(
+            builder,
+            yield_constr,
+            local.bits[0],
+            modulus,
+            local.prev_sum,
+            local.double,
+            local.sum,
+            local.sum_aux,
+        );
+
+        // next.prev_sum = local.sum if is_not_last_round
+        next.prev_sum
+            .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.sum);
+    }
+
+    fn lookups(&self) -> Vec<Lookup<F>> {
+        vec![Lookup {
+            columns: Column::singles(RANGE_CHECK_COLS).collect(),
+            table_column: Column::single(RANGE_COUNTER_COL),
+            frequencies_column: Column::single(FREQ_COL),
+            filter_columns: vec![Default::default(); NUM_RANGE_CHECK_COLS],
+        }]
     }
 
     fn constraint_degree(&self) -> usize {
@@ -257,10 +357,18 @@ mod tests {
     use ark_bn254::G1Affine;
     use ark_ff::UniformRand;
     use plonky2::{
-        field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
+        field::goldilocks_field::GoldilocksField,
+        iop::witness::PartialWitness,
+        plonk::{
+            circuit_builder::CircuitBuilder, circuit_data::CircuitConfig,
+            config::PoseidonGoldilocksConfig,
+        },
         util::timing::TimingTree,
     };
-    use starky::config::StarkConfig;
+    use starky::{
+        config::StarkConfig,
+        recursive_verifier::{add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target},
+    };
 
     use super::{G1ScalarMulInput, G1ScalarMulStark};
 
@@ -271,7 +379,7 @@ mod tests {
     #[test]
     fn scalar_mul_stark() {
         let mut rng = rand::thread_rng();
-        let num_inputs = 3;
+        let num_inputs = 100;
 
         let inputs = (0..num_inputs)
             .map(|timestamp| G1ScalarMulInput {
@@ -283,11 +391,22 @@ mod tests {
             .collect::<Vec<_>>();
         let stark = G1ScalarMulStark::<F, D>::new();
         let config = StarkConfig::standard_fast_config();
-        let trace = stark.generate_trace(&inputs, 8);
+        let trace = stark.generate_trace(&inputs, 1 << 16);
 
         let mut timing = TimingTree::default();
         let proof =
             starky::prover::prove::<F, C, _, D>(stark, &config, trace, &[], &mut timing).unwrap();
-        starky::verifier::verify_stark_proof(stark, proof, &config).unwrap();
+        starky::verifier::verify_stark_proof(stark, proof.clone(), &config).unwrap();
+
+        let circuit_config = CircuitConfig::default();
+        let mut builder = CircuitBuilder::<F, D>::new(circuit_config);
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let proof_t =
+            add_virtual_stark_proof_with_pis(&mut builder, &stark, &config, degree_bits, 0, 0);
+        let zero = builder.zero();
+        let mut pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut pw, &proof_t, &proof, zero);
+        let circuit = builder.build::<C>();
+        let circuit_proof = circuit.prove(pw).unwrap();
     }
 }

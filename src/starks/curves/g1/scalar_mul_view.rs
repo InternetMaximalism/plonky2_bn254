@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::starks::curves::common::round_flags::{RoundFlags, ROUND_FLAGS_LEN};
 
 use super::{
@@ -8,6 +10,11 @@ use super::{
 pub(crate) const N_BITS: usize = 256;
 pub(crate) const G1_SCALAR_MUL_VIEW_LEN: usize =
     3 * G1_LEN + 2 * G1_ADD_AUX_LEN + N_BITS + 1 + ROUND_FLAGS_LEN + 3;
+
+pub(crate) const FREQ_COL: usize = G1_SCALAR_MUL_VIEW_LEN - 2;
+pub(crate) const RANGE_COUNTER_COL: usize = G1_SCALAR_MUL_VIEW_LEN - 1;
+pub(crate) const RANGE_CHECK_COLS: Range<usize> = 0..3 * G1_LEN + 2 * G1_ADD_AUX_LEN;
+pub(crate) const NUM_RANGE_CHECK_COLS: usize = 3 * G1_LEN + 2 * G1_ADD_AUX_LEN;
 
 #[repr(C)]
 #[derive(Clone, Debug)]
