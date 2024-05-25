@@ -9,6 +9,7 @@ use crate::starks::{
     N_LIMBS, U256,
 };
 pub mod add;
+pub mod scalar_mul_ctl;
 pub mod scalar_mul_stark;
 pub mod scalar_mul_view;
 
@@ -43,5 +44,15 @@ impl<F: RichField> G1<F> {
             x: self.x.to_i64(),
             y: self.y.to_i64(),
         }
+    }
+}
+
+impl<T: Copy + Clone + Default> G1<T> {
+    pub(super) fn to_slice(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self as *const Self as *const T, G1_LEN) }
+    }
+    pub(super) fn from_slice(slice: &[T]) -> &Self {
+        assert_eq!(slice.len(), G1_LEN);
+        unsafe { &*(slice.as_ptr() as *const Self) }
     }
 }

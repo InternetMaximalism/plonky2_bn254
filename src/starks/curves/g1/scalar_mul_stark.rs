@@ -366,31 +366,37 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
     }
 
     fn requires_ctls(&self) -> bool {
-        false
+        true
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::starks::curves::common::utils::tests::random_biguint;
+    use crate::starks::curves::common::ctl_values::set_ctl_values_target;
+    use crate::starks::curves::common::verifier::recursive_verifier;
+    use crate::starks::curves::common::verifier::verify;
+    use crate::starks::curves::g1::G1_LEN;
+    use crate::starks::curves::{
+        common::{prover::prove, utils::tests::random_biguint},
+        g1::scalar_mul_ctl::{generate_ctl_values, scalar_mul_ctl},
+    };
+    use crate::starks::N_LIMBS;
     use ark_bn254::G1Affine;
     use ark_ff::UniformRand;
+    use hashbrown::HashMap;
+    use plonky2::field::extension::Extendable;
+    use plonky2::hash::hash_types::RichField;
+    use plonky2::iop::target::Target;
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::{
-        field::goldilocks_field::GoldilocksField,
-        iop::witness::PartialWitness,
-        plonk::{
-            circuit_builder::CircuitBuilder, circuit_data::CircuitConfig,
-            config::PoseidonGoldilocksConfig,
-        },
+        field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
         util::timing::TimingTree,
     };
-    use starky::{
-        config::StarkConfig,
-        recursive_verifier::{
-            add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
-            verify_stark_proof_circuit,
-        },
-    };
+    use starky::config::StarkConfig;
+    use starky::cross_table_lookup::debug_utils::check_ctls;
+    use starky::recursive_verifier::set_stark_proof_target;
 
     use super::{G1ScalarMulInput, G1ScalarMulStark};
 
@@ -416,21 +422,70 @@ mod tests {
         let trace = stark.generate_trace(&inputs, 1 << 16);
 
         let mut timing = TimingTree::default();
-        let proof =
-            starky::prover::prove::<F, C, _, D>(stark, &config, trace, &[], &mut timing).unwrap();
-        starky::verifier::verify_stark_proof(stark, proof.clone(), &config).unwrap();
+        let ctl_values = generate_ctl_values::<F>(&inputs);
+        let cross_table_lookups = scalar_mul_ctl();
+        let proof = prove::<F, C, _, D>(
+            &stark,
+            &config,
+            &trace,
+            &cross_table_lookups,
+            &[],
+            &mut timing,
+        )
+        .unwrap();
+        check_ctls(&[trace.to_vec()], &cross_table_lookups, &ctl_values);
+        verify(
+            &stark,
+            &config,
+            &cross_table_lookups,
+            &proof,
+            &[],
+            &ctl_values,
+        )
+        .unwrap();
 
-        let circuit_config = CircuitConfig::default();
-        let mut builder = CircuitBuilder::<F, D>::new(circuit_config);
         let degree_bits = proof.proof.recover_degree_bits(&config);
-        let proof_t =
-            add_virtual_stark_proof_with_pis(&mut builder, &stark, &config, degree_bits, 0, 0);
-        verify_stark_proof_circuit::<F, C, _, D>(&mut builder, stark, proof_t.clone(), &config);
+        let circuit_config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(circuit_config);
+        let ctl_values_t = add_ctl_values_target(&mut builder, num_inputs);
+        let proof_t = recursive_verifier::<F, C, _, D>(
+            &mut builder,
+            &stark,
+            degree_bits,
+            &cross_table_lookups,
+            &config,
+            &ctl_values_t,
+        );
         let zero = builder.zero();
         let mut pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut pw, &proof_t, &proof, zero);
+        set_stark_proof_target(&mut pw, &proof_t.proof, &proof.proof, zero);
+        set_ctl_values_target(&mut pw, &ctl_values_t, &ctl_values);
         let circuit = builder.build::<C>();
         let circuit_proof = circuit.prove(pw).unwrap();
         circuit.verify(circuit_proof).unwrap();
+    }
+
+    fn add_ctl_values_target<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        num_inputs: usize,
+    ) -> HashMap<usize, Vec<Vec<Target>>> {
+        let inputs = (0..num_inputs)
+            .map(|_| {
+                [(); 2 * G1_LEN + N_LIMBS + 1] // plus one for the timestamp
+                    .map(|_| builder.add_virtual_target())
+                    .to_vec()
+            })
+            .collect::<Vec<_>>();
+        let outputs = (0..num_inputs)
+            .map(|_| {
+                [(); G1_LEN + 1] // // plus one for the timestamp
+                    .map(|_| builder.add_virtual_target())
+                    .to_vec()
+            })
+            .collect::<Vec<_>>();
+        let mut ctl_values_target = HashMap::new();
+        ctl_values_target.insert(0, inputs);
+        ctl_values_target.insert(1, outputs);
+        ctl_values_target
     }
 }
