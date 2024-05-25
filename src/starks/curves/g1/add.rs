@@ -184,7 +184,7 @@ pub(crate) fn eval_g1_add_circuit<F: RichField + Extendable<D>, const D: usize>(
     c: G1<ExtensionTarget<D>>,
     aux: G1AddAux<ExtensionTarget<D>>,
 ) {
-    let delta_x = pol_sub_normal_ext_circuit(builder, a.x.value, b.x.value);
+    let delta_x = pol_sub_normal_ext_circuit(builder, b.x.value, a.x.value);
 
     eval_is_modulus_zero_circuit(
         builder,
@@ -270,9 +270,13 @@ mod tests {
     use starky::{
         config::StarkConfig,
         evaluation_frame::{StarkEvaluationFrame, StarkFrame},
-        recursive_verifier::{add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target},
+        recursive_verifier::{
+            add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+            verify_stark_proof_circuit,
+        },
         stark::Stark,
         util::trace_rows_to_poly_values,
+        verifier::verify_stark_proof,
     };
 
     type F = GoldilocksField;
@@ -306,6 +310,7 @@ mod tests {
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let proof_t =
             add_virtual_stark_proof_with_pis(&mut builder, &stark, &config, degree_bits, 0, 0);
+        verify_stark_proof_circuit::<F, C, _, D>(&mut builder, stark, proof_t.clone(), &config);
         let zero = builder.zero();
         let mut pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut pw, &proof_t, &proof, zero);

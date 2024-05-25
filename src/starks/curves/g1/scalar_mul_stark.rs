@@ -4,7 +4,7 @@ use ark_bn254::G1Affine;
 use ark_ec::AffineRepr;
 use num::BigUint;
 use plonky2::{
-    field::{extension::Extendable, polynomial::PolynomialValues},
+    field::{extension::Extendable, polynomial::PolynomialValues, types::Field},
     hash::hash_types::RichField,
     iop::ext_target::ExtensionTarget,
 };
@@ -259,6 +259,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         // next.prev_sum = local.sum if is_not_last_round
         next.prev_sum
             .eval_eq(yield_constr, is_not_last_round, &local.sum);
+
+        // range_counter
+        // diff is one or zero
+        let diff = next.range_counter - local.range_counter;
+        yield_constr.constraint_transition(diff * diff - diff);
+        // last range_counter is range_max - 1
+        let range_max_minus_one = P::Scalar::from_canonical_usize((1 << 16) - 1);
+        yield_constr.constraint_last_row(local.range_counter - range_max_minus_one);
     }
 
     fn eval_ext_circuit(
@@ -331,6 +339,17 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         // next.prev_sum = local.sum if is_not_last_round
         next.prev_sum
             .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.sum);
+
+        // range_counter
+        // diff is one or zero
+        let diff = builder.sub_extension(next.range_counter, local.range_counter);
+        let t = builder.mul_sub_extension(diff, diff, diff);
+        yield_constr.constraint_transition(builder, t);
+        // last range_counter is range_max - 1
+        let range_max_minus_one =
+            builder.constant_extension(F::Extension::from_canonical_usize((1 << 16) - 1));
+        let diff = builder.sub_extension(local.range_counter, range_max_minus_one);
+        yield_constr.constraint_last_row(builder, diff);
     }
 
     fn lookups(&self) -> Vec<Lookup<F>> {
@@ -367,7 +386,10 @@ mod tests {
     };
     use starky::{
         config::StarkConfig,
-        recursive_verifier::{add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target},
+        recursive_verifier::{
+            add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+            verify_stark_proof_circuit,
+        },
     };
 
     use super::{G1ScalarMulInput, G1ScalarMulStark};
@@ -379,7 +401,7 @@ mod tests {
     #[test]
     fn scalar_mul_stark() {
         let mut rng = rand::thread_rng();
-        let num_inputs = 100;
+        let num_inputs = 1 << 8;
 
         let inputs = (0..num_inputs)
             .map(|timestamp| G1ScalarMulInput {
@@ -403,10 +425,12 @@ mod tests {
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let proof_t =
             add_virtual_stark_proof_with_pis(&mut builder, &stark, &config, degree_bits, 0, 0);
+        verify_stark_proof_circuit::<F, C, _, D>(&mut builder, stark, proof_t.clone(), &config);
         let zero = builder.zero();
         let mut pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut pw, &proof_t, &proof, zero);
         let circuit = builder.build::<C>();
         let circuit_proof = circuit.prove(pw).unwrap();
+        circuit.verify(circuit_proof).unwrap();
     }
 }

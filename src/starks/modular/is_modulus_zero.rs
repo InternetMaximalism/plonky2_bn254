@@ -95,7 +95,7 @@ pub(crate) fn eval_is_modulus_zero_circuit<F: RichField + Extendable<D>, const D
     let mut diff = pol_mul_wide_ext_circuit(builder, input.value, aux.inv.value);
     let one = builder.one_extension();
     let is_zero_minus_one = builder.sub_extension(is_zero, one);
-    diff[0] = builder.sub_extension(diff[0], is_zero_minus_one);
+    diff[0] = builder.add_extension(diff[0], is_zero_minus_one);
     eval_modulus_zero_circuit(
         builder,
         yield_constr,
