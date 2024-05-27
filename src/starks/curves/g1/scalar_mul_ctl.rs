@@ -1,19 +1,16 @@
 use crate::starks::{
-    curves::g1::{
-        scalar_mul_view::{
-            BITS_COLS, DOUBLE_COLS, OUTPUT_FILTER_COL, PREV_SUM_COLS, SUM_COLS, TIMESTAMP_COL,
-        },
-        G1,
-    },
+    curves::g1::{scalar_mul_view::INPUT_FILTER_COL, G1},
     LIMB_BITS, U256,
 };
 
-use super::{scalar_mul_stark::G1ScalarMulInput, scalar_mul_view::INPUT_FILTER_COL};
+use super::{
+    scalar_mul_stark::G1ScalarMulInput,
+    scalar_mul_view::{A_COLS, BITS_COLS, B_COLS, OUTPUT_FILTER_COL, SUM_COLS, TIMESTAMP_COL},
+};
 use ark_bn254::G1Affine;
 use ark_ec::AffineRepr;
 use hashbrown::HashMap;
 use itertools::Itertools;
-use num_bigint::ToBigInt;
 use plonky2::{field::types::Field, hash::hash_types::RichField};
 use starky::{
     cross_table_lookup::{CrossTableLookup, TableWithColumns},
@@ -21,21 +18,21 @@ use starky::{
 };
 
 pub(crate) fn scalar_mul_ctl<F: Field>() -> Vec<CrossTableLookup<F>> {
-    let x_limb_cols = Column::singles(DOUBLE_COLS);
-    let offset_limb_cols = Column::singles(PREV_SUM_COLS);
+    let x_limb_cols = Column::singles(B_COLS);
+    let offset_limb_cols = Column::singles(A_COLS);
     let s_limb_cols = BITS_COLS
         .chunks(LIMB_BITS)
         .into_iter()
         .map(|chunk| Column::le_bits(chunk))
         .collect::<Vec<_>>();
     let output_limb_cols = Column::singles(SUM_COLS);
-    let timestampl_col = Column::single(TIMESTAMP_COL);
+    let timestamp_col = Column::single(TIMESTAMP_COL);
 
     let mut input_cols = vec![];
     input_cols.extend(x_limb_cols);
     input_cols.extend(offset_limb_cols);
     input_cols.extend(s_limb_cols);
-    input_cols.push(timestampl_col.clone());
+    input_cols.push(timestamp_col.clone());
     let input_looked_table = TableWithColumns::new(
         0,
         input_cols,
@@ -44,7 +41,7 @@ pub(crate) fn scalar_mul_ctl<F: Field>() -> Vec<CrossTableLookup<F>> {
 
     let mut output_cols = vec![];
     output_cols.extend(output_limb_cols);
-    output_cols.push(timestampl_col);
+    output_cols.push(timestamp_col);
     let output_looked_table = TableWithColumns::new(
         0,
         output_cols,
