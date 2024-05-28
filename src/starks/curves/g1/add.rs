@@ -276,7 +276,6 @@ mod tests {
         },
         stark::Stark,
         util::trace_rows_to_poly_values,
-        verifier::verify_stark_proof,
     };
 
     type F = GoldilocksField;

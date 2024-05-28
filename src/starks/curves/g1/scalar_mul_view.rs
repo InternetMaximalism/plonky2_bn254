@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::starks::curves::common::round_flags::{RoundFlags, ROUND_FLAGS_LEN};
+use crate::starks::common::round_flags::{RoundFlags, ROUND_FLAGS_LEN};
 
 use super::{
     add::{G1AddAux, G1_ADD_AUX_LEN},

@@ -1,7 +1,7 @@
 use ark_bn254::Fq;
 use num::{BigInt, One as _, Zero as _};
 use plonky2::{
-    field::{extension::Extendable, packed::PackedField, types::PrimeField64},
+    field::{extension::Extendable, packed::PackedField},
     hash::hash_types::RichField,
     iop::ext_target::ExtensionTarget,
     plonk::circuit_builder::CircuitBuilder,

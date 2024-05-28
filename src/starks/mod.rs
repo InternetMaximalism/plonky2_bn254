@@ -5,9 +5,10 @@ use plonky2::hash::hash_types::RichField;
 use crate::starks::modular::utils::bigint_to_columns;
 use crate::starks::modular::utils::columns_to_bigint;
 
-pub mod curves;
-pub mod modular;
-pub mod utils;
+pub(crate) mod common;
+pub(crate) mod curves;
+pub(crate) mod modular;
+pub(crate) mod utils;
 
 pub(crate) const N_LIMBS: usize = 16;
 pub(crate) const LIMB_BITS: usize = 16;

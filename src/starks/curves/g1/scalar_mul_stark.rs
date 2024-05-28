@@ -16,14 +16,12 @@ use starky::{
 };
 
 use crate::starks::{
-    curves::{
-        common::{
-            eq::{EvalEq, EvalEqCircuit},
-            round_flags::{eval_round_flags, eval_round_flags_circuit, generate_round_flags},
-            utils::biguint_to_le_bits,
-        },
-        g1::scalar_mul_view::{NUM_RANGE_CHECK_COLS, N_BITS},
+    common::{
+        eq::{EvalEq, EvalEqCircuit},
+        round_flags::{eval_round_flags, eval_round_flags_circuit, generate_round_flags},
+        utils::biguint_to_le_bits,
     },
+    curves::g1::scalar_mul_view::{NUM_RANGE_CHECK_COLS, N_BITS},
     utils::{bn254_base_modulus_extension_target, bn254_base_modulus_packfield},
     LIMB_BITS,
 };
@@ -36,7 +34,7 @@ use super::{
     },
 };
 
-pub struct G1ScalarMulInput {
+pub(crate) struct G1ScalarMulInput {
     pub(crate) s: BigUint,
     pub(crate) x: G1Affine,
     pub(crate) offset: G1Affine,
@@ -44,7 +42,7 @@ pub struct G1ScalarMulInput {
 }
 
 #[derive(Copy, Clone)]
-pub struct G1ScalarMulStark<F: RichField + Extendable<D>, const D: usize> {
+pub(crate) struct G1ScalarMulStark<F: RichField + Extendable<D>, const D: usize> {
     _phantom: PhantomData<F>,
 }
 
@@ -474,16 +472,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
 
 #[cfg(test)]
 mod tests {
-    use crate::starks::curves::common::ctl_values::set_ctl_values_target;
-    use crate::starks::curves::common::verifier::recursive_verifier;
-    use crate::starks::curves::common::verifier::verify;
+    use crate::starks::common::ctl_values::set_ctl_values_target;
+    use crate::starks::common::verifier::recursive_verifier;
+    use crate::starks::common::verifier::verify;
     use crate::starks::curves::g1::G1_LEN;
-    use crate::starks::curves::{
-        common::{prover::prove, utils::tests::random_biguint},
-        g1::scalar_mul_ctl::{generate_ctl_values, scalar_mul_ctl},
-    };
     use crate::starks::LIMB_BITS;
     use crate::starks::N_LIMBS;
+    use crate::starks::{
+        common::{prover::prove, utils::tests::random_biguint},
+        curves::g1::scalar_mul_ctl::{generate_ctl_values, scalar_mul_ctl},
+    };
     use ark_bn254::G1Affine;
     use ark_ff::UniformRand;
     use hashbrown::HashMap;
