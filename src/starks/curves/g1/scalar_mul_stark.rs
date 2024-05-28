@@ -25,6 +25,7 @@ use crate::starks::{
         g1::scalar_mul_view::{NUM_RANGE_CHECK_COLS, N_BITS},
     },
     utils::{bn254_base_modulus_extension_target, bn254_base_modulus_packfield},
+    LIMB_BITS,
 };
 
 use super::{
@@ -71,7 +72,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
     }
 
     fn generate_range_checks(&self, rows: &mut Vec<[F; G1_SCALAR_MUL_VIEW_LEN]>) {
-        let range_max = 1 << 16;
+        let range_max = 1 << LIMB_BITS;
         for (index, row) in rows.iter_mut().enumerate() {
             if index < range_max {
                 row[RANGE_COUNTER_COL] = F::from_canonical_usize(index);
@@ -317,7 +318,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         let diff = next.range_counter - local.range_counter;
         yield_constr.constraint_transition(diff * diff - diff);
         // last range_counter is range_max - 1
-        let range_max_minus_one = P::Scalar::from_canonical_usize((1 << 16) - 1);
+        let range_max_minus_one = P::Scalar::from_canonical_usize((1 << LIMB_BITS) - 1);
         yield_constr.constraint_last_row(local.range_counter - range_max_minus_one);
     }
 
@@ -448,7 +449,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         yield_constr.constraint_transition(builder, t);
         // last range_counter is range_max - 1
         let range_max_minus_one =
-            builder.constant_extension(F::Extension::from_canonical_usize((1 << 16) - 1));
+            builder.constant_extension(F::Extension::from_canonical_usize((1 << LIMB_BITS) - 1));
         let diff = builder.sub_extension(local.range_counter, range_max_minus_one);
         yield_constr.constraint_last_row(builder, diff);
     }
@@ -481,6 +482,7 @@ mod tests {
         common::{prover::prove, utils::tests::random_biguint},
         g1::scalar_mul_ctl::{generate_ctl_values, scalar_mul_ctl},
     };
+    use crate::starks::LIMB_BITS;
     use crate::starks::N_LIMBS;
     use ark_bn254::G1Affine;
     use ark_ff::UniformRand;
@@ -522,7 +524,7 @@ mod tests {
             .collect::<Vec<_>>();
         let stark = G1ScalarMulStark::<F, D>::new();
         let config = StarkConfig::standard_fast_config();
-        let trace = stark.generate_trace(&inputs, 1 << 16);
+        let trace = stark.generate_trace(&inputs, 1 << LIMB_BITS);
 
         let mut timing = TimingTree::default();
         let cross_table_lookups = scalar_mul_ctl();
