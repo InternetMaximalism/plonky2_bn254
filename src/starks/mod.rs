@@ -1,6 +1,7 @@
 use ark_bn254::Fq;
 use num::BigUint;
 use plonky2::hash::hash_types::RichField;
+use plonky2::plonk::vars;
 
 use crate::starks::modular::utils::bigint_to_columns;
 use crate::starks::modular::utils::columns_to_bigint;

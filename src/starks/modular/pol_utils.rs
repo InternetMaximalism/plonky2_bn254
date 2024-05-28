@@ -234,38 +234,6 @@ pub(crate) fn pol_mul_wide2_ext_circuit<F: RichField + Extendable<D>, const D: u
     res
 }
 
-/// Given a(x) and b(x), return a(x)*b(x) mod 2^256.
-pub(crate) fn pol_mul_lo<T, const N: usize>(a: [T; N], b: [T; N]) -> [T; N]
-where
-    T: AddAssign + Copy + Default + Mul<Output = T>,
-{
-    let mut res = pol_zero();
-    for deg in 0..N {
-        // Invariant: i + j = deg
-        for i in 0..=deg {
-            let j = deg - i;
-            res[deg] += a[i] * b[j];
-        }
-    }
-    res
-}
-
-pub(crate) fn pol_mul_lo_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-    a: [ExtensionTarget<D>; N_LIMBS],
-    b: [ExtensionTarget<D>; N_LIMBS],
-) -> [ExtensionTarget<D>; N_LIMBS] {
-    let zero = builder.zero_extension();
-    let mut res = [zero; N_LIMBS];
-    for deg in 0..N_LIMBS {
-        for i in 0..=deg {
-            let j = deg - i;
-            res[deg] = builder.mul_add_extension(a[i], b[j], res[deg]);
-        }
-    }
-    res
-}
-
 pub(crate) fn pol_mul_scalar<T, const N: usize>(a: [T; N], c: T) -> [T; N]
 where
     T: Mul<Output = T> + Copy + Default,
