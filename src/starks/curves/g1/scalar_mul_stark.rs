@@ -28,14 +28,14 @@ use crate::starks::{
 };
 
 use super::{
-    add::{eval_g1_add, eval_g1_add_circuit, generate_g1_add, G1AddAux},
+    add::{eval_g1_add, eval_g1_add_circuit, generate_g1_add},
     scalar_mul_view::{
         G1ScalarMulView, FREQ_COL, G1_SCALAR_MUL_VIEW_LEN, PERIOD, RANGE_CHECK_COLS,
         RANGE_COUNTER_COL,
     },
 };
 
-pub(crate) struct G1ScalarMulInput {
+pub struct G1ScalarMulInput {
     pub(crate) s: BigUint,
     pub(crate) x: G1Affine,
     pub(crate) offset: G1Affine,
@@ -43,7 +43,7 @@ pub(crate) struct G1ScalarMulInput {
 }
 
 #[derive(Copy, Clone)]
-pub(crate) struct G1ScalarMulStark<F: RichField + Extendable<D>, const D: usize> {
+pub struct G1ScalarMulStark<F: RichField + Extendable<D>, const D: usize> {
     _phantom: PhantomData<F>,
 }
 
@@ -66,7 +66,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
         }
         let default_row = [F::ZERO; G1_SCALAR_MUL_VIEW_LEN];
         rows.resize(num_rows, default_row);
-        // self.generate_range_checks(&mut rows);
+        self.generate_range_checks(&mut rows);
         trace_rows_to_poly_values(rows)
     }
 
@@ -94,8 +94,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
     fn generate_one_set(&self, input: &G1ScalarMulInput) -> Vec<[F; G1_SCALAR_MUL_VIEW_LEN]> {
         let timestamp = F::from_canonical_usize(input.timestamp);
         let mut rows: Vec<[F; G1_SCALAR_MUL_VIEW_LEN]> = vec![];
-        let mut row =
-            self.generate_first_row_for_one_set(timestamp, input.s.clone(), input.x, input.offset);
+        let mut row = self.generate_first_row(timestamp, input.s.clone(), input.x, input.offset);
         rows.push(row.to_slice().to_vec().try_into().unwrap());
         for row_index in 1..PERIOD {
             row = self.generate_transition(row_index, &row);
@@ -111,14 +110,14 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
 
     /// Generate the first row of the trace for one set of scalar multiplication
     /// except for range check column
-    fn generate_first_row_for_one_set(
+    fn generate_first_row(
         &self,
         timestamp: F,
         s: BigUint,
         x: G1Affine,
         offset: G1Affine,
     ) -> G1ScalarMulView<F> {
-        let round_flags = generate_round_flags::<F>(0, N_BITS);
+        let round_flags = generate_round_flags::<F>(0, PERIOD);
         let s_bits = biguint_to_le_bits(&s, N_BITS);
         let bits: [F; N_BITS] = s_bits
             .into_iter()
@@ -140,7 +139,8 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
             add_aux,
             bits,
             timestamp,
-            is_even: F::ONE,
+            is_adding: F::ONE,
+            is_doubling_not_last: F::ZERO,
             round_flags,
             filter: F::ONE,
             frequency: F::default(),
@@ -153,13 +153,8 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
         row_index: usize,
         local: &G1ScalarMulView<F>,
     ) -> G1ScalarMulView<F> {
-        let is_even = F::ONE - local.is_even; // next is_even is opposite of current is_even
-        let is_addition_step = is_even;
-        let timestamp = local.timestamp;
-        let round_flags = generate_round_flags(row_index, PERIOD);
-
-        // addition step
-        if is_addition_step.is_one() {
+        if local.is_doubling_not_last.is_one() {
+            // next step is adding
             let a = local.sum;
             let b = local.double;
             let (c, add_aux) = generate_g1_add(a, b);
@@ -168,6 +163,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
                 bits[i] = local.bits[(i + 1) % N_BITS]; // rotate bits to the left
             }
             let sum = if bits[0].is_one() { c } else { a };
+            let round_flags = generate_round_flags(row_index, PERIOD);
             G1ScalarMulView {
                 double: local.double,
                 sum,
@@ -176,19 +172,22 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
                 c,
                 add_aux,
                 bits,
-                timestamp,
-                is_even,
+                timestamp: local.timestamp,
+                is_adding: F::ONE,
+                is_doubling_not_last: F::ZERO,
                 round_flags,
                 filter: F::ONE,
                 frequency: F::default(),
                 range_counter: F::default(),
             }
-        } else {
-            // doubling step
+        } else if local.is_adding.is_one() {
+            // next step is doubling
             let a = local.double;
             let b = local.double;
             let (c, add_aux) = generate_g1_add(a, b);
             let bits = local.bits;
+            let round_flags = generate_round_flags(row_index, PERIOD);
+            let is_not_last_round = F::ONE - round_flags.is_last_round;
             G1ScalarMulView {
                 double: c,
                 sum: local.sum,
@@ -197,13 +196,16 @@ impl<F: RichField + Extendable<D>, const D: usize> G1ScalarMulStark<F, D> {
                 c,
                 add_aux,
                 bits,
-                timestamp,
-                is_even,
+                timestamp: local.timestamp,
+                is_adding: F::ZERO,
+                is_doubling_not_last: is_not_last_round,
                 round_flags,
                 filter: F::ONE,
                 frequency: F::default(),
                 range_counter: F::default(),
             }
+        } else {
+            panic!("Invalid state");
         }
     }
 }
@@ -232,10 +234,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         // is_last_round is "filtered". In other words, `is_last_round` is affected by the factor of the filter.
         // Therefore, `filter - is_last_round`` becomes "filtered" version of `1 - is_last_round`.
         let is_not_last_round = local.filter - local.round_flags.is_last_round;
-
-        let is_addition_step = local.is_even;
-        let is_next_addition_step = next.is_even;
-        let is_next_doubling_step = next.filter - next.is_even;
+        let is_next_not_last_round = next.filter - next.round_flags.is_last_round;
 
         // check g1 addition
         eval_g1_add(
@@ -247,49 +246,53 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
             local.c,
             local.add_aux,
         );
+        // first round should be adding
+        local
+            .is_adding
+            .eval_eq(yield_constr, local.round_flags.is_first_round, &P::ONES);
 
         // doubling_step -> addition_step
-        next.a.eval_eq(
+        next.a
+            .eval_eq(yield_constr, local.is_doubling_not_last, &local.sum);
+        next.b
+            .eval_eq(yield_constr, local.is_doubling_not_last, &local.double);
+        next.sum.eval_eq(
             yield_constr,
-            is_next_addition_step * is_not_last_round,
-            &local.sum,
+            next.bits[0] * local.is_doubling_not_last,
+            &next.c,
         );
-        next.b.eval_eq(
+        next.sum.eval_eq(
             yield_constr,
-            is_next_addition_step * is_not_last_round,
-            &local.double,
+            (P::ONES - next.bits[0]) * local.is_doubling_not_last,
+            &next.a,
         );
-        // next.sum.eval_eq(
-        //     yield_constr,
-        //     is_next_addition_step * is_not_last_round,
-        //     &next.c,
-        // );
-        next.double.eval_eq(
-            yield_constr,
-            is_next_addition_step * is_not_last_round,
-            &local.double,
-        );
+        next.double
+            .eval_eq(yield_constr, local.is_doubling_not_last, &local.double);
+        next.is_adding
+            .eval_eq(yield_constr, local.is_doubling_not_last, &P::ONES);
+        next.is_doubling_not_last
+            .eval_eq(yield_constr, local.is_doubling_not_last, &P::ZEROS);
         // bit rotation if is_doubling_step and is_not_last_round
         for i in 0..N_BITS {
             next.bits[i].eval_eq(
                 yield_constr,
-                is_next_addition_step * is_not_last_round,
+                local.is_doubling_not_last,
                 &local.bits[(i + 1) % N_BITS],
             );
         }
 
         // addition_step -> doubling_step
-        next.a
-            .eval_eq(yield_constr, is_next_doubling_step, &local.double);
-        next.b
-            .eval_eq(yield_constr, is_next_doubling_step, &local.double);
-        next.sum
-            .eval_eq(yield_constr, is_next_doubling_step, &local.sum);
-        next.double
-            .eval_eq(yield_constr, is_next_doubling_step, &next.c);
+        next.a.eval_eq(yield_constr, local.is_adding, &local.double);
+        next.b.eval_eq(yield_constr, local.is_adding, &local.double);
+        next.sum.eval_eq(yield_constr, local.is_adding, &local.sum);
+        next.double.eval_eq(yield_constr, local.is_adding, &next.c);
+        next.is_adding
+            .eval_eq(yield_constr, local.is_adding, &P::ZEROS);
+        next.is_doubling_not_last
+            .eval_eq(yield_constr, local.is_adding, &is_next_not_last_round);
         // bit is not rotated if is_next_doubling_step
         for i in 0..N_BITS {
-            next.bits[i].eval_eq(yield_constr, is_next_doubling_step, &local.bits[i]);
+            next.bits[i].eval_eq(yield_constr, local.is_adding, &local.bits[i]);
         }
 
         // round_flags
@@ -311,11 +314,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
 
         // range_counter
         // diff is one or zero
-        // let diff = next.range_counter - local.range_counter;
-        // yield_constr.constraint_transition(diff * diff - diff);
-        // // last range_counter is range_max - 1
-        // let range_max_minus_one = P::Scalar::from_canonical_usize((1 << 16) - 1);
-        // yield_constr.constraint_last_row(local.range_counter - range_max_minus_one);
+        let diff = next.range_counter - local.range_counter;
+        yield_constr.constraint_transition(diff * diff - diff);
+        // last range_counter is range_max - 1
+        let range_max_minus_one = P::Scalar::from_canonical_usize((1 << 16) - 1);
+        yield_constr.constraint_last_row(local.range_counter - range_max_minus_one);
     }
 
     fn eval_ext_circuit(
@@ -324,91 +327,140 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G1ScalarMulSt
         vars: &Self::EvaluationFrameTarget,
         yield_constr: &mut starky::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        // let modulus = bn254_base_modulus_extension_target(builder);
-        // let local = G1ScalarMulView::from_slice(vars.get_local_values());
-        // let next = G1ScalarMulView::from_slice(vars.get_next_values());
+        let modulus = bn254_base_modulus_extension_target(builder);
+        let local = G1ScalarMulView::from_slice(vars.get_local_values());
+        let next = G1ScalarMulView::from_slice(vars.get_next_values());
+        let one = builder.one_extension();
+        let zero = builder.zero_extension();
 
-        // // is_last_round is "filtered". In other words, `is_last_round` is affected by the factor of the filter.
-        // // Therefore, `filter - is_last_round`` becomes "filtered" version of `1 - is_last_round`.
-        // let is_not_last_round =
-        //     builder.sub_extension(local.filter, local.round_flags.is_last_round);
+        // is_last_round is "filtered". In other words, `is_last_round` is affected by the factor of the filter.
+        // Therefore, `filter - is_last_round`` becomes "filtered" version of `1 - is_last_round`.
+        let is_not_last_round =
+            builder.sub_extension(local.filter, local.round_flags.is_last_round);
+        let is_next_not_last_round =
+            builder.sub_extension(next.filter, next.round_flags.is_last_round);
 
-        // // bit rotation
-        // for i in 0..N_BITS {
-        //     next.bits[i].eval_eq_circuit(
-        //         builder,
-        //         yield_constr,
-        //         is_not_last_round,
-        //         &local.bits[(i + 1) % N_BITS],
-        //     );
-        // }
+        // check g1 addition
+        eval_g1_add_circuit(
+            builder,
+            yield_constr,
+            local.filter,
+            modulus,
+            local.a,
+            local.b,
+            local.c,
+            local.add_aux,
+        );
+        // first round should be adding
+        local.is_adding.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.round_flags.is_first_round,
+            &one,
+        );
 
-        // // round_flags
-        // eval_round_flags_circuit(
-        //     builder,
-        //     yield_constr,
-        //     N_BITS,
-        //     local.filter,
-        //     local.round_flags,
-        //     next.round_flags.counter,
-        // );
+        // doubling_step -> addition_step
+        next.a.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.is_doubling_not_last,
+            &local.sum,
+        );
+        next.b.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.is_doubling_not_last,
+            &local.double,
+        );
+        let t = builder.mul_extension(next.bits[0], local.is_doubling_not_last);
+        next.sum.eval_eq_circuit(builder, yield_constr, t, &next.c);
+        let not_next_bit = builder.sub_extension(one, next.bits[0]);
+        let t = builder.mul_extension(not_next_bit, local.is_doubling_not_last);
+        next.sum.eval_eq_circuit(builder, yield_constr, t, &next.a);
+        next.double.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.is_doubling_not_last,
+            &local.double,
+        );
+        next.is_adding
+            .eval_eq_circuit(builder, yield_constr, local.is_doubling_not_last, &one);
+        next.is_doubling_not_last.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.is_doubling_not_last,
+            &zero,
+        );
+        // bit rotation if is_doubling_step and is_not_last_round
+        for i in 0..N_BITS {
+            next.bits[i].eval_eq_circuit(
+                builder,
+                yield_constr,
+                local.is_doubling_not_last,
+                &local.bits[(i + 1) % N_BITS],
+            );
+        }
 
-        // // timestamp
-        // next.timestamp
-        //     .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.timestamp);
+        // addition_step -> doubling_step
+        next.a
+            .eval_eq_circuit(builder, yield_constr, local.is_adding, &local.double);
+        next.b
+            .eval_eq_circuit(builder, yield_constr, local.is_adding, &local.double);
+        next.sum
+            .eval_eq_circuit(builder, yield_constr, local.is_adding, &local.sum);
+        next.double
+            .eval_eq_circuit(builder, yield_constr, local.is_adding, &next.c);
+        next.is_adding
+            .eval_eq_circuit(builder, yield_constr, local.is_adding, &zero);
+        next.is_doubling_not_last.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.is_adding,
+            &is_next_not_last_round,
+        );
+        // bit is not rotated if is_next_doubling_step
+        for i in 0..N_BITS {
+            next.bits[i].eval_eq_circuit(builder, yield_constr, local.is_adding, &local.bits[i]);
+        }
 
-        // // filter transition
-        // next.filter
-        //     .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.filter);
+        // round_flags
+        eval_round_flags_circuit(
+            builder,
+            yield_constr,
+            PERIOD,
+            local.filter,
+            local.round_flags,
+            next.round_flags.counter,
+        );
 
-        // // double
-        // eval_g1_add_circuit(
-        //     builder,
-        //     yield_constr,
-        //     is_not_last_round,
-        //     modulus,
-        //     local.double,
-        //     local.double,
-        //     next.double,
-        //     next.double_aux,
-        // );
+        // timestamp
+        next.timestamp
+            .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.timestamp);
 
-        // // sum
-        // eval_g1_add_circuit(
-        //     builder,
-        //     yield_constr,
-        //     local.bits[0],
-        //     modulus,
-        //     local.prev_sum,
-        //     local.double,
-        //     local.sum,
-        //     local.sum_aux,
-        // );
-
-        // // next.prev_sum = local.sum if is_not_last_round
-        // next.prev_sum
-        //     .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.sum);
+        // filter transition
+        next.filter
+            .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.filter);
 
         // range_counter
         // diff is one or zero
-        // let diff = builder.sub_extension(next.range_counter, local.range_counter);
-        // let t = builder.mul_sub_extension(diff, diff, diff);
-        // yield_constr.constraint_transition(builder, t);
-        // // last range_counter is range_max - 1
-        // let range_max_minus_one =
-        //     builder.constant_extension(F::Extension::from_canonical_usize((1 << 16) - 1));
-        // let diff = builder.sub_extension(local.range_counter, range_max_minus_one);
-        // yield_constr.constraint_last_row(builder, diff);
+        let diff = builder.sub_extension(next.range_counter, local.range_counter);
+        let t = builder.mul_sub_extension(diff, diff, diff);
+        yield_constr.constraint_transition(builder, t);
+        // last range_counter is range_max - 1
+        let range_max_minus_one =
+            builder.constant_extension(F::Extension::from_canonical_usize((1 << 16) - 1));
+        let diff = builder.sub_extension(local.range_counter, range_max_minus_one);
+        yield_constr.constraint_last_row(builder, diff);
     }
 
-    // fn lookups(&self) -> Vec<Lookup<F>> {
-    //     vec![Lookup {
-    //         columns: Column::singles(RANGE_CHECK_COLS).collect(),
-    //         table_column: Column::single(RANGE_COUNTER_COL),
-    //         frequencies_column: Column::single(FREQ_COL),
-    //         filter_columns: vec![Default::default(); NUM_RANGE_CHECK_COLS],
-    //     }]
-    // }
+    fn lookups(&self) -> Vec<Lookup<F>> {
+        vec![Lookup {
+            columns: Column::singles(RANGE_CHECK_COLS).collect(),
+            table_column: Column::single(RANGE_COUNTER_COL),
+            frequencies_column: Column::single(FREQ_COL),
+            filter_columns: vec![Default::default(); NUM_RANGE_CHECK_COLS],
+        }]
+    }
 
     fn constraint_degree(&self) -> usize {
         3
@@ -457,7 +509,7 @@ mod tests {
     #[test]
     fn scalar_mul_stark() {
         let mut rng = rand::thread_rng();
-        let num_inputs = 3;
+        let num_inputs = 1 << 7;
         env_logger::init();
 
         let inputs = (0..num_inputs)
@@ -470,7 +522,7 @@ mod tests {
             .collect::<Vec<_>>();
         let stark = G1ScalarMulStark::<F, D>::new();
         let config = StarkConfig::standard_fast_config();
-        let trace = stark.generate_trace(&inputs, 16);
+        let trace = stark.generate_trace(&inputs, 1 << 16);
 
         let mut timing = TimingTree::default();
         let cross_table_lookups = scalar_mul_ctl();
@@ -499,27 +551,27 @@ mod tests {
         )
         .unwrap();
 
-        // let degree_bits = proof.proof.recover_degree_bits(&config);
-        // let circuit_config = CircuitConfig::standard_recursion_config();
-        // let mut builder = CircuitBuilder::<F, D>::new(circuit_config);
-        // let ctl_values_t = add_ctl_values_target(&mut builder, num_inputs);
-        // let proof_t = recursive_verifier::<F, C, _, D>(
-        //     &mut builder,
-        //     &stark,
-        //     degree_bits,
-        //     &cross_table_lookups,
-        //     &config,
-        //     &ctl_values_t,
-        // );
-        // let zero = builder.zero();
-        // let mut pw = PartialWitness::new();
-        // set_stark_proof_target(&mut pw, &proof_t.proof, &proof.proof, zero);
-        // set_ctl_values_target(&mut pw, &ctl_values_t, &ctl_values);
-        // let circuit = builder.build::<C>();
-        // let circuit_proof = timed!(timing, "circuit prove", circuit.prove(pw).unwrap());
-        // circuit.verify(circuit_proof).unwrap();
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let circuit_config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(circuit_config);
+        let ctl_values_t = add_ctl_values_target(&mut builder, num_inputs);
+        let proof_t = recursive_verifier::<F, C, _, D>(
+            &mut builder,
+            &stark,
+            degree_bits,
+            &cross_table_lookups,
+            &config,
+            &ctl_values_t,
+        );
+        let zero = builder.zero();
+        let mut pw = PartialWitness::new();
+        set_stark_proof_target(&mut pw, &proof_t.proof, &proof.proof, zero);
+        set_ctl_values_target(&mut pw, &ctl_values_t, &ctl_values);
+        let circuit = builder.build::<C>();
+        let circuit_proof = timed!(timing, "circuit prove", circuit.prove(pw).unwrap());
+        circuit.verify(circuit_proof).unwrap();
 
-        // timing.print();
+        timing.print();
     }
 
     fn add_ctl_values_target<F: RichField + Extendable<D>, const D: usize>(
