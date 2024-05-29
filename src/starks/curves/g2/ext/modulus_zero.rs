@@ -1,4 +1,4 @@
-use num::BigInt;
+use num::{BigInt, Zero as _};
 use plonky2::{
     field::{extension::Extendable, packed::PackedField, types::PrimeField64},
     hash::hash_types::RichField,
@@ -20,7 +20,7 @@ use super::U256ExtMul;
 pub(crate) const EXT_MODULUS_AUX_ZERO_LEN: usize = 2 * MODULUS_AUX_ZERO_LEN;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct ExtModulusZeroAux<F> {
     pub(crate) c0_aux: ModulusZeroAux<F>,
     pub(crate) c1_aux: ModulusZeroAux<F>,

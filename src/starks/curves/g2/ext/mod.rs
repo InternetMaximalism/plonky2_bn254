@@ -1,7 +1,5 @@
 use ark_bn254::Fq2;
-use num::BigUint;
 use plonky2::hash::hash_types::RichField;
-use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 
 use crate::starks::{N_LIMBS, U256};
 
@@ -12,20 +10,8 @@ pub(crate) mod modulus_zero;
 pub(crate) mod mul;
 pub(crate) mod sub;
 
-pub(crate) trait ArithmeticOps:
-    Add<Output = Self>
-    + AddAssign<Self>
-    + Sub<Output = Self>
-    + SubAssign<Self>
-    + Mul<Output = Self>
-    + MulAssign<Self>
-    + Copy
-    + Default
-{
-}
-
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct U256Ext<T> {
     pub c0: U256<T>,
     pub c1: U256<T>,

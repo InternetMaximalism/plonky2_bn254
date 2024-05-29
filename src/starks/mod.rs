@@ -15,7 +15,7 @@ pub(crate) const N_LIMBS: usize = 16;
 pub(crate) const LIMB_BITS: usize = 16;
 
 /// 256-bit value. Each element is non-negative and less than 2^LIMB_BITS.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct U256<T> {
     pub value: [T; N_LIMBS],
 }

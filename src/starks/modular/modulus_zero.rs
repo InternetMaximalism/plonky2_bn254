@@ -32,7 +32,7 @@ pub(crate) const MODULUS_AUX_ZERO_LEN: usize = 5 * N_LIMBS;
 /// Auxiliary information to ensure that the given number is divisible by the modulus
 /// Each field except `quot_abs` is subject to range checks of 0 <= x < 2^16
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct ModulusZeroAux<F> {
     pub(crate) is_quot_positive: F,
     pub(crate) quot_abs: [F; N_LIMBS + 1],
@@ -47,7 +47,7 @@ pub(crate) fn generate_modulus_zero<F: PrimeField64>(
     input: &[i64; 2 * N_LIMBS - 1],
 ) -> ModulusZeroAux<F> {
     let input_bg = columns_to_bigint(&input);
-    debug_assert!(&input_bg % modulus == BigInt::zero());
+    assert!(&input_bg % modulus == BigInt::zero());
     let modulus_limbs = bigint_to_columns(modulus);
     let quot = &input_bg / modulus;
     let is_quot_positive = match quot.sign() {
@@ -64,11 +64,11 @@ pub(crate) fn generate_modulus_zero<F: PrimeField64>(
     pol_sub_assign(&mut constr_poly, &prod);
     // aux_limbs = constr/(x- β)
     let mut aux_limbs = pol_remove_root_2exp::<LIMB_BITS, _, { 2 * N_LIMBS }>(constr_poly);
-    debug_assert!(aux_limbs[31] == 0);
+    assert!(aux_limbs[31] == 0);
     for c in aux_limbs.iter_mut() {
         *c += AUX_COEFF_ABS_MAX;
     }
-    debug_assert!(aux_limbs.iter().all(|&c| c.abs() <= 2 * AUX_COEFF_ABS_MAX));
+    assert!(aux_limbs.iter().all(|&c| c.abs() <= 2 * AUX_COEFF_ABS_MAX));
     let aux_input_lo = aux_limbs[..2 * N_LIMBS - 1]
         .iter()
         .map(|&c| F::from_canonical_u16(c as u16))
@@ -78,11 +78,52 @@ pub(crate) fn generate_modulus_zero<F: PrimeField64>(
         .map(|&c| F::from_canonical_u16((c >> LIMB_BITS) as u16))
         .collect_vec();
     let quot_abs = quot_abs_limbs.map(|x| F::from_canonical_i64(x));
-    ModulusZeroAux {
+    let aux = ModulusZeroAux {
         is_quot_positive,
         quot_abs,
         aux_input_lo: aux_input_lo.try_into().unwrap(),
         aux_input_hi: aux_input_hi.try_into().unwrap(),
+    };
+    let modulus = modulus_limbs.map(|x| F::from_canonical_i64(x));
+    let input = input.map(|x| F::from_noncanonical_i64(x));
+    assert_modulus_zero(F::ONE, U256 { value: modulus }, input, aux);
+    aux
+}
+
+/// Evaluate the constraint that the given `input` is divisible by the modulus
+pub(crate) fn assert_modulus_zero<F: PrimeField64>(
+    filter: F,
+    modulus: U256<F>,
+    input: [F; 2 * N_LIMBS - 1],
+    aux: ModulusZeroAux<F>,
+) {
+    assert!(
+        filter * (aux.is_quot_positive * aux.is_quot_positive - aux.is_quot_positive) == F::ZERO
+    );
+    let quot_sign = F::TWO * aux.is_quot_positive - F::ONES;
+    let quot = aux
+        .quot_abs
+        .iter()
+        .map(|&limb| quot_sign * limb)
+        .collect_vec();
+    // constr_poly = q(x) * m(x)
+    let mut constr_poly: [_; 2 * N_LIMBS] = pol_mul_wide2(quot.try_into().unwrap(), modulus.value);
+    let base = F::from_canonical_u64(1 << LIMB_BITS);
+    let offset = F::from_canonical_u64(AUX_COEFF_ABS_MAX as u64);
+
+    // constr_poly = q(x) * m(x) + (x - β) * s(x)
+    let mut aux_poly = [F::ZERO; 2 * N_LIMBS];
+    aux_poly[..2 * N_LIMBS - 1]
+        .iter_mut()
+        .enumerate()
+        .for_each(|(i, c)| {
+            *c = aux.aux_input_lo[i] - offset;
+            *c += base * aux.aux_input_hi[i];
+        });
+    pol_add_assign(&mut constr_poly, &pol_adjoin_root(aux_poly, base));
+    pol_sub_assign(&mut constr_poly, &input);
+    for &c in constr_poly.iter() {
+        assert!(filter * c == F::ZERO);
     }
 }
 

@@ -12,10 +12,13 @@ use crate::starks::modular::is_modulus_zero::eval_is_modulus_zero;
 use crate::starks::modular::is_modulus_zero::eval_is_modulus_zero_circuit;
 use crate::starks::modular::is_modulus_zero::generate_is_modulus_zero;
 use crate::starks::modular::is_modulus_zero::IsModulusZeroAux;
+use crate::starks::modular::is_modulus_zero::IS_MODULUS_AUX_ZERO_LEN;
 use crate::starks::U256;
 
+pub(crate) const IS_EXT_MODULUS_AUX_ZERO_LEN: usize = 2 + IS_MODULUS_AUX_ZERO_LEN;
+
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct IsExtModulusZeroAux<F> {
     pub(crate) is_c0_zero: F,
     pub(crate) is_c1_zero: F,
@@ -29,8 +32,9 @@ pub(crate) fn generate_is_ext_modulus_zero<F: RichField>(
 ) -> (F, IsExtModulusZeroAux<F>) {
     let (is_c0_zero, c0_aux) = generate_is_modulus_zero(modulus, &input.c0);
     let (is_c1_zero, c1_aux) = generate_is_modulus_zero(modulus, &input.c1);
+    let is_zero = is_c0_zero * is_c1_zero;
     (
-        is_c0_zero,
+        is_zero,
         IsExtModulusZeroAux {
             is_c0_zero,
             is_c1_zero,

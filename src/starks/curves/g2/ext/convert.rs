@@ -8,9 +8,9 @@ use crate::starks::{
     N_LIMBS, U256,
 };
 
-use super::{ArithmeticOps, U256Ext, U256ExtMul};
+use super::{U256Ext, U256ExtMul};
 
-pub(crate) fn uint256ext_to_uint256extmul<T: ArithmeticOps>(x: U256Ext<T>) -> U256ExtMul<T> {
+pub(crate) fn uint256ext_to_uint256extmul<T: Default + Copy>(x: U256Ext<T>) -> U256ExtMul<T> {
     let mut c0 = [T::default(); 2 * N_LIMBS - 1];
     c0[..N_LIMBS].copy_from_slice(&x.c0.value);
     let mut c1 = [T::default(); 2 * N_LIMBS - 1];

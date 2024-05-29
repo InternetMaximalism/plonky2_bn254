@@ -25,7 +25,7 @@ use super::{
 pub(crate) const IS_MODULUS_AUX_ZERO_LEN: usize = N_LIMBS + MODULUS_AUX_ZERO_LEN;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct IsModulusZeroAux<F> {
     pub(crate) inv: U256<F>,
     pub(crate) modulus_zero_aux: ModulusZeroAux<F>,
