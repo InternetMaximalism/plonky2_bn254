@@ -1,12 +1,28 @@
 use ark_bn254::Fq2;
 use num::BigUint;
 use plonky2::hash::hash_types::RichField;
+use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 
 use crate::starks::{N_LIMBS, U256};
 
-pub(crate) mod addsub;
-pub(crate) mod is_zero;
+pub(crate) mod add;
+pub(crate) mod convert;
+pub(crate) mod is_modulus_zero;
+pub(crate) mod modulus_zero;
 pub(crate) mod mul;
+pub(crate) mod sub;
+
+pub(crate) trait ArithmeticOps:
+    Add<Output = Self>
+    + AddAssign<Self>
+    + Sub<Output = Self>
+    + SubAssign<Self>
+    + Mul<Output = Self>
+    + MulAssign<Self>
+    + Copy
+    + Default
+{
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]

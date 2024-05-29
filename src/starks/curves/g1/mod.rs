@@ -1,13 +1,7 @@
 use ark_bn254::{Fq, G1Affine};
 use plonky2::hash::hash_types::RichField;
 
-use crate::starks::{
-    modular::{
-        is_modulus_zero::{IsModulusZeroAux, IS_MODULUS_AUX_ZERO_LEN},
-        modulus_zero::{ModulusZeroAux, MODULUS_AUX_ZERO_LEN},
-    },
-    N_LIMBS, U256,
-};
+use crate::starks::{N_LIMBS, U256};
 pub mod add;
 pub mod scalar_mul_ctl;
 pub mod scalar_mul_stark;

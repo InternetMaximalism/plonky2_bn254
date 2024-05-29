@@ -185,7 +185,6 @@ mod tests {
 
     use super::*;
     use crate::starks::{
-        curves::g1::G1,
         modular::pol_utils::{
             pol_mul_wide, pol_mul_wide_ext_circuit, pol_sub_normal, pol_sub_normal_ext_circuit,
         },
