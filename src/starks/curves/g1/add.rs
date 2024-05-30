@@ -331,10 +331,14 @@ mod tests {
 
     impl<T: Copy + Clone + Default> G1AddView<T> {
         fn to_slice(&self) -> &[T] {
+            debug_assert_eq!(
+                std::mem::size_of::<Self>(),
+                G1_ADD_VIEW_LEN * std::mem::size_of::<T>()
+            );
             unsafe { std::slice::from_raw_parts(self as *const Self as *const T, G1_ADD_VIEW_LEN) }
         }
         fn from_slice(slice: &[T]) -> &Self {
-            assert_eq!(slice.len(), G1_ADD_VIEW_LEN);
+            debug_assert_eq!(slice.len(), G1_ADD_VIEW_LEN);
             unsafe { &*(slice.as_ptr() as *const Self) }
         }
     }

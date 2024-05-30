@@ -44,6 +44,10 @@ impl<F: RichField> G1<F> {
 
 impl<T: Copy + Clone + Default> G1<T> {
     pub(super) fn to_slice(&self) -> &[T] {
+        debug_assert_eq!(
+            std::mem::size_of::<Self>(),
+            G1_LEN * std::mem::size_of::<T>()
+        );
         unsafe { std::slice::from_raw_parts(self as *const Self as *const T, G1_LEN) }
     }
     pub(super) fn from_slice(slice: &[T]) -> &Self {

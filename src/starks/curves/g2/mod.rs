@@ -6,6 +6,7 @@ use crate::starks::N_LIMBS;
 
 pub(crate) mod add;
 pub(crate) mod ext;
+// pub(crate) mod scalar_mul_view;
 
 pub(crate) const G2_LEN: usize = 4 * N_LIMBS;
 

@@ -264,7 +264,7 @@ pub(crate) fn eval_g2_add_circuit<F: RichField + Extendable<D>, const D: usize>(
 
 #[cfg(test)]
 mod tests {
-    use std::marker::PhantomData;
+    use std::{marker::PhantomData, mem};
 
     use super::*;
     use crate::starks::{
@@ -296,24 +296,6 @@ mod tests {
     type F = GoldilocksField;
     const D: usize = 2;
     type C = PoseidonGoldilocksConfig;
-
-    #[test]
-    fn g2_view() {
-        let mut rng = rand::thread_rng();
-        let a = G2Affine::rand(&mut rng);
-        let b = G2Affine::rand(&mut rng);
-        let (c, aux) = generate_g2_add::<F>(a.into(), b.into());
-
-        let view = G2AddView::<F> {
-            a: a.into(),
-            b: b.into(),
-            c: c.into(),
-            filter: F::ONE,
-            aux,
-        };
-        let view_expected = G2AddView::from_slice(view.to_slice());
-        assert_eq!(&view, view_expected);
-    }
 
     #[test]
     fn g2_add_stark() {
@@ -364,8 +346,13 @@ mod tests {
 
     impl<T: Copy + Clone + Default> G2AddView<T> {
         fn to_slice(&self) -> &[T] {
+            debug_assert_eq!(
+                mem::size_of::<G2AddView<T>>(),
+                G2_ADD_VIEW_LEN * mem::size_of::<T>()
+            );
             unsafe { std::slice::from_raw_parts(self as *const Self as *const T, G2_ADD_VIEW_LEN) }
         }
+
         fn from_slice(slice: &[T]) -> &Self {
             assert_eq!(slice.len(), G2_ADD_VIEW_LEN);
             unsafe { &*(slice.as_ptr() as *const Self) }

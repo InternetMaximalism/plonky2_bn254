@@ -22,6 +22,10 @@ pub struct U256<T> {
 
 impl<T: Copy + Clone + Default> U256<T> {
     pub(super) fn to_slice(&self) -> &[T] {
+        debug_assert_eq!(
+            std::mem::size_of::<Self>(),
+            N_LIMBS * std::mem::size_of::<T>()
+        );
         unsafe { std::slice::from_raw_parts(self as *const Self as *const T, N_LIMBS) }
     }
     pub(super) fn from_slice(slice: &[T]) -> &Self {
