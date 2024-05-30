@@ -15,6 +15,7 @@ use crate::starks::{
 
 pub(crate) mod add;
 pub(crate) mod ext;
+pub(crate) mod range_check_target;
 pub(crate) mod scalar_mul_ctl;
 pub(crate) mod scalar_mul_stark;
 pub(crate) mod scalar_mul_view;

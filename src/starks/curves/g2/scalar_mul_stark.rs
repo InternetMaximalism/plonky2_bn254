@@ -21,13 +21,17 @@ use crate::starks::{
         round_flags::{eval_round_flags, eval_round_flags_circuit, generate_round_flags},
         utils::biguint_to_le_bits,
     },
-    curves::g2::scalar_mul_view::{NUM_RANGE_CHECK_COLS, N_BITS},
+    curves::g2::{
+        range_check_target::fill_decomposed_cols,
+        scalar_mul_view::{NUM_RANGE_CHECK_COLS, N_BITS},
+    },
     utils::{bn254_base_modulus_extension_target, bn254_base_modulus_packfield},
     LIMB_BITS,
 };
 
 use super::{
     add::{eval_g2_add, eval_g2_add_circuit, generate_g2_add},
+    range_check_target::{eval_decomposition, eval_decomposition_circuit},
     scalar_mul_view::{
         G2ScalarMulView, FREQ_COL, G2_SCALAR_MUL_VIEW_LEN, PERIOD, RANGE_CHECK_COLS,
         RANGE_COUNTER_COL,
@@ -40,6 +44,8 @@ pub(crate) struct G2ScalarMulInput {
     pub(crate) offset: G2Affine,
     pub(crate) timestamp: usize,
 }
+
+const RANGE_MAX: usize = 1 << 8;
 
 #[derive(Copy, Clone)]
 pub(crate) struct G2ScalarMulStark<F: RichField + Extendable<D>, const D: usize> {
@@ -70,18 +76,17 @@ impl<F: RichField + Extendable<D>, const D: usize> G2ScalarMulStark<F, D> {
     }
 
     fn generate_range_checks(&self, rows: &mut Vec<[F; G2_SCALAR_MUL_VIEW_LEN]>) {
-        let range_max = 1 << LIMB_BITS;
         for (index, row) in rows.iter_mut().enumerate() {
-            if index < range_max {
+            if index < RANGE_MAX {
                 row[RANGE_COUNTER_COL] = F::from_canonical_usize(index);
             } else {
-                row[RANGE_COUNTER_COL] = F::from_canonical_usize(range_max - 1);
+                row[RANGE_COUNTER_COL] = F::from_canonical_usize(RANGE_MAX - 1);
             }
         }
         for row_index in 0..rows.len() {
             for col_index in RANGE_CHECK_COLS {
                 let x = rows[row_index][col_index].to_canonical_u64() as usize;
-                assert!(x < range_max);
+                assert!(x < RANGE_MAX);
                 rows[x][FREQ_COL] += F::ONE;
             }
         }
@@ -94,9 +99,11 @@ impl<F: RichField + Extendable<D>, const D: usize> G2ScalarMulStark<F, D> {
         let timestamp = F::from_canonical_usize(input.timestamp);
         let mut rows: Vec<[F; G2_SCALAR_MUL_VIEW_LEN]> = vec![];
         let mut row = self.generate_first_row(timestamp, input.s.clone(), input.x, input.offset);
+        fill_decomposed_cols(&mut row);
         rows.push(row.to_slice().to_vec().try_into().unwrap());
         for row_index in 1..PERIOD {
             row = self.generate_transition(row_index, &row);
+            fill_decomposed_cols(&mut row);
             rows.push(row.to_slice().to_vec().try_into().unwrap());
         }
         let expected_output: G2Affine =
@@ -142,6 +149,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G2ScalarMulStark<F, D> {
             is_doubling_not_last: F::ZERO,
             round_flags,
             filter: F::ONE,
+            decomposed_cols: [F::default(); NUM_RANGE_CHECK_COLS],
             frequency: F::default(),
             range_counter: F::default(),
         }
@@ -176,6 +184,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G2ScalarMulStark<F, D> {
                 is_doubling_not_last: F::ZERO,
                 round_flags,
                 filter: F::ONE,
+                decomposed_cols: [F::default(); NUM_RANGE_CHECK_COLS],
                 frequency: F::default(),
                 range_counter: F::default(),
             }
@@ -200,6 +209,7 @@ impl<F: RichField + Extendable<D>, const D: usize> G2ScalarMulStark<F, D> {
                 is_doubling_not_last: is_not_last_round,
                 round_flags,
                 filter: F::ONE,
+                decomposed_cols: [F::default(); NUM_RANGE_CHECK_COLS],
                 frequency: F::default(),
                 range_counter: F::default(),
             }
@@ -311,12 +321,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G2ScalarMulSt
         next.filter
             .eval_eq(yield_constr, is_not_last_round, &local.filter);
 
+        // range decomposition
+        eval_decomposition(yield_constr, local);
+
         // range_counter
         // diff is one or zero
         let diff = next.range_counter - local.range_counter;
         yield_constr.constraint_transition(diff * diff - diff);
         // last range_counter is range_max - 1
-        let range_max_minus_one = P::Scalar::from_canonical_usize((1 << LIMB_BITS) - 1);
+        let range_max_minus_one = P::Scalar::from_canonical_usize(RANGE_MAX - 1);
         yield_constr.constraint_last_row(local.range_counter - range_max_minus_one);
     }
 
@@ -440,6 +453,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G2ScalarMulSt
         next.filter
             .eval_eq_circuit(builder, yield_constr, is_not_last_round, &local.filter);
 
+        // range decomposition
+        eval_decomposition_circuit(builder, yield_constr, local);
+
         // range_counter
         // diff is one or zero
         let diff = builder.sub_extension(next.range_counter, local.range_counter);
@@ -447,7 +463,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G2ScalarMulSt
         yield_constr.constraint_transition(builder, t);
         // last range_counter is range_max - 1
         let range_max_minus_one =
-            builder.constant_extension(F::Extension::from_canonical_usize((1 << LIMB_BITS) - 1));
+            builder.constant_extension(F::Extension::from_canonical_usize(RANGE_MAX - 1));
         let diff = builder.sub_extension(local.range_counter, range_max_minus_one);
         yield_constr.constraint_last_row(builder, diff);
     }
@@ -500,6 +516,7 @@ mod tests {
     use starky::cross_table_lookup::debug_utils::check_ctls;
     use starky::recursive_verifier::set_stark_proof_target;
 
+    use super::RANGE_MAX;
     use super::{G2ScalarMulInput, G2ScalarMulStark};
 
     type F = GoldilocksField;
@@ -509,7 +526,7 @@ mod tests {
     #[test]
     fn g2_scalar_mul() {
         let mut rng = rand::thread_rng();
-        let num_inputs = 1;
+        let num_inputs = 2;
         env_logger::init();
 
         let inputs = (0..num_inputs)
@@ -522,7 +539,7 @@ mod tests {
             .collect::<Vec<_>>();
         let stark = G2ScalarMulStark::<F, D>::new();
         let config = StarkConfig::standard_fast_config();
-        let trace = stark.generate_trace(&inputs, 1 << LIMB_BITS);
+        let trace = stark.generate_trace(&inputs, RANGE_MAX);
 
         let mut timing = TimingTree::default();
         let cross_table_lookups = scalar_mul_ctl();

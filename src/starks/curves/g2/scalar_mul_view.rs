@@ -4,6 +4,7 @@ use crate::starks::common::round_flags::{RoundFlags, ROUND_FLAGS_LEN};
 
 use super::{
     add::{G2AddAux, G2_ADD_AUX_LEN},
+    range_check_target::NUM_DECOMPOSED_COLS,
     G2, G2_LEN,
 };
 
@@ -11,13 +12,14 @@ pub(super) const PERIOD: usize = 2 * N_BITS;
 
 pub(super) const N_BITS: usize = 256;
 pub(super) const G2_SCALAR_MUL_VIEW_LEN: usize =
-    5 * G2_LEN + G2_ADD_AUX_LEN + N_BITS + ROUND_FLAGS_LEN + 6;
+    5 * G2_LEN + G2_ADD_AUX_LEN + N_BITS + ROUND_FLAGS_LEN + NUM_DECOMPOSED_COLS + 6;
 
 // range check columns
 pub(super) const FREQ_COL: usize = G2_SCALAR_MUL_VIEW_LEN - 2;
 pub(super) const RANGE_COUNTER_COL: usize = G2_SCALAR_MUL_VIEW_LEN - 1;
-pub(super) const RANGE_CHECK_COLS: Range<usize> = 2 * G2_LEN..5 * G2_LEN + G2_ADD_AUX_LEN;
-pub(super) const NUM_RANGE_CHECK_COLS: usize = RANGE_CHECK_COLS.end - RANGE_CHECK_COLS.start;
+pub(super) const RANGE_CHECK_COLS: Range<usize> =
+    (G2_SCALAR_MUL_VIEW_LEN - NUM_DECOMPOSED_COLS - 2)..(G2_SCALAR_MUL_VIEW_LEN - 2);
+pub(super) const NUM_RANGE_CHECK_COLS: usize = NUM_DECOMPOSED_COLS;
 
 // CTL columns
 pub(super) const SUM_COLS: Range<usize> = G2_LEN..2 * G2_LEN;
@@ -45,8 +47,9 @@ pub(super) struct G2ScalarMulView<F: Copy + Clone + Default> {
     pub(super) is_adding: F,               // is adding
     pub(super) is_doubling_not_last: F,    // is doubling and not last round
     pub(super) filter: F,                  // filter of scalar multiplication constraint
-    pub(super) frequency: F,               // frequency colum for range check
-    pub(super) range_counter: F,           // counter for range check
+    pub(super) decomposed_cols: [F; NUM_RANGE_CHECK_COLS],
+    pub(super) frequency: F,     // frequency colum for range check
+    pub(super) range_counter: F, // counter for range check
 }
 
 impl<F: Copy + Clone + Default> Default for G2ScalarMulView<F> {
@@ -64,6 +67,7 @@ impl<F: Copy + Clone + Default> Default for G2ScalarMulView<F> {
             is_adding: F::default(),
             is_doubling_not_last: F::default(),
             filter: F::default(),
+            decomposed_cols: [F::default(); NUM_RANGE_CHECK_COLS],
             frequency: F::default(),
             range_counter: F::default(),
         }
