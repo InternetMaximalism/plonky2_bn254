@@ -15,7 +15,7 @@ use crate::starks::modular::is_modulus_zero::IsModulusZeroAux;
 use crate::starks::modular::is_modulus_zero::IS_MODULUS_AUX_ZERO_LEN;
 use crate::starks::U256;
 
-pub(crate) const IS_EXT_MODULUS_AUX_ZERO_LEN: usize = 2 + IS_MODULUS_AUX_ZERO_LEN;
+pub(crate) const IS_EXT_MODULUS_AUX_ZERO_LEN: usize = 2 + 2 * IS_MODULUS_AUX_ZERO_LEN;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

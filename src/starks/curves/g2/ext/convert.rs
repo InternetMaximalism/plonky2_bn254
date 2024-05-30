@@ -18,7 +18,7 @@ pub(crate) fn uint256ext_to_uint256extmul<T: Default + Copy>(x: U256Ext<T>) -> U
     U256ExtMul { c0, c1 }
 }
 
-pub(crate) fn add_uint256ext_circuit<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn uint256ext_to_uint256extmul_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     x: U256Ext<ExtensionTarget<D>>,
 ) -> U256ExtMul<ExtensionTarget<D>> {
