@@ -1,7 +1,16 @@
 use ark_bn254::{Fq, G1Affine};
-use plonky2::hash::hash_types::RichField;
+use plonky2::{
+    field::{extension::Extendable, packed::PackedField},
+    hash::hash_types::RichField,
+    iop::ext_target::ExtensionTarget,
+    plonk::circuit_builder::CircuitBuilder,
+};
+use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
-use crate::starks::{N_LIMBS, U256};
+use crate::starks::{
+    common::eq::{EvalEq, EvalEqCircuit},
+    N_LIMBS, U256,
+};
 pub mod add;
 pub mod scalar_mul_ctl;
 pub mod scalar_mul_stark;
@@ -53,5 +62,27 @@ impl<T: Copy + Clone + Default> G1<T> {
     pub(super) fn from_slice(slice: &[T]) -> &Self {
         assert_eq!(slice.len(), G1_LEN);
         unsafe { &*(slice.as_ptr() as *const Self) }
+    }
+}
+
+impl<P: PackedField> EvalEq<P> for G1<P> {
+    fn eval_eq(&self, yield_constr: &mut ConstraintConsumer<P>, filter: P, other: &Self) {
+        self.x.eval_eq(yield_constr, filter, &other.x);
+        self.y.eval_eq(yield_constr, filter, &other.y);
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> EvalEqCircuit<F, D> for G1<ExtensionTarget<D>> {
+    fn eval_eq_circuit(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        yield_constr: &mut RecursiveConstraintConsumer<F, D>,
+        filter: ExtensionTarget<D>,
+        other: &Self,
+    ) {
+        self.x
+            .eval_eq_circuit(builder, yield_constr, filter, &other.x);
+        self.y
+            .eval_eq_circuit(builder, yield_constr, filter, &other.y);
     }
 }

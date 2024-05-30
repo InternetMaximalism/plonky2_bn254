@@ -6,7 +6,7 @@ use plonky2::{
 };
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
-use crate::starks::{curves::g1::G1, U256};
+use crate::starks::U256;
 
 pub(crate) trait EvalEq<P: PackedField> {
     fn eval_eq(&self, yield_constr: &mut ConstraintConsumer<P>, filter: P, other: &Self);
@@ -63,27 +63,5 @@ impl<F: RichField + Extendable<D>, const D: usize> EvalEqCircuit<F, D>
         for (a, b) in self.value.iter().zip(other.value.iter()) {
             a.eval_eq_circuit(builder, yield_constr, filter, b);
         }
-    }
-}
-
-impl<P: PackedField> EvalEq<P> for G1<P> {
-    fn eval_eq(&self, yield_constr: &mut ConstraintConsumer<P>, filter: P, other: &Self) {
-        self.x.eval_eq(yield_constr, filter, &other.x);
-        self.y.eval_eq(yield_constr, filter, &other.y);
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> EvalEqCircuit<F, D> for G1<ExtensionTarget<D>> {
-    fn eval_eq_circuit(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        yield_constr: &mut RecursiveConstraintConsumer<F, D>,
-        filter: ExtensionTarget<D>,
-        other: &Self,
-    ) {
-        self.x
-            .eval_eq_circuit(builder, yield_constr, filter, &other.x);
-        self.y
-            .eval_eq_circuit(builder, yield_constr, filter, &other.y);
     }
 }

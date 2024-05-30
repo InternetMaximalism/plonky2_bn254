@@ -1,7 +1,16 @@
 use ark_bn254::Fq2;
-use plonky2::hash::hash_types::RichField;
+use plonky2::{
+    field::{extension::Extendable, packed::PackedField},
+    hash::hash_types::RichField,
+    iop::ext_target::ExtensionTarget,
+    plonk::circuit_builder::CircuitBuilder,
+};
+use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
-use crate::starks::{N_LIMBS, U256};
+use crate::starks::{
+    common::eq::{EvalEq, EvalEqCircuit},
+    N_LIMBS, U256,
+};
 
 pub(crate) mod add;
 pub(crate) mod convert;
@@ -60,5 +69,29 @@ impl<F: RichField> U256Ext<F> {
             c0: self.c0.to_u16(),
             c1: self.c1.to_u16(),
         }
+    }
+}
+
+impl<P: PackedField> EvalEq<P> for U256Ext<P> {
+    fn eval_eq(&self, yield_constr: &mut ConstraintConsumer<P>, filter: P, other: &Self) {
+        self.c0.eval_eq(yield_constr, filter, &other.c0);
+        self.c1.eval_eq(yield_constr, filter, &other.c1);
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> EvalEqCircuit<F, D>
+    for U256Ext<ExtensionTarget<D>>
+{
+    fn eval_eq_circuit(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        yield_constr: &mut RecursiveConstraintConsumer<F, D>,
+        filter: ExtensionTarget<D>,
+        other: &Self,
+    ) {
+        self.c0
+            .eval_eq_circuit(builder, yield_constr, filter, &other.c0);
+        self.c1
+            .eval_eq_circuit(builder, yield_constr, filter, &other.c1);
     }
 }
