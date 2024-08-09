@@ -154,11 +154,11 @@ impl<F: RichField + Extendable<D>, const D: usize> G1Target<F, D> {
         self.x.to_vec().into_iter().chain(self.y.to_vec()).collect()
     }
 
-    pub fn from_vec(input: &[Target]) -> Self {
+    pub fn from_slice(input: &[Target]) -> Self {
         let num_limbs = FqTarget::<F, D>::num_modulus_limbs();
         assert_eq!(input.len(), 2 * num_limbs);
-        let x = FqTarget::from_vec(&input[0..num_limbs]);
-        let y = FqTarget::from_vec(&input[num_limbs..]);
+        let x = FqTarget::from_slice(&input[0..num_limbs]);
+        let y = FqTarget::from_slice(&input[num_limbs..]);
         G1Target { x, y }
     }
 

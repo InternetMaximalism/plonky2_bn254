@@ -65,13 +65,13 @@ impl<F: RichField + Extendable<D>, const D: usize> FqTarget<F, D> {
     }
 
     /// Create an element from a vector, assuming that range checks and modulus.
-    pub fn from_vec(value: &[Target]) -> Self {
+    pub fn from_slice(value: &[Target]) -> Self {
         let limbs = value.into_iter().map(|v| U32Target(*v)).collect();
         Self::from_value(&BigUintTarget { limbs }, true)
     }
 
     pub fn from_single(value: Target) -> Self {
-        Self::from_vec(&[value])
+        Self::from_slice(&[value])
     }
 
     pub fn zero(builder: &mut CircuitBuilder<F, D>) -> FqTarget<F, D> {

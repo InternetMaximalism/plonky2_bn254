@@ -40,17 +40,17 @@ impl<F: RichField + Extendable<D>, const D: usize> Fq2Target<F, D> {
             .collect()
     }
 
-    pub fn from_vec(value: &[Target]) -> Self {
+    pub fn from_slice(value: &[Target]) -> Self {
         let num_limbs = FqTarget::<F, D>::num_modulus_limbs();
         assert!(value.len() == 2 * num_limbs);
-        let c0 = FqTarget::from_vec(&value[0..num_limbs]);
-        let c1 = FqTarget::from_vec(&value[num_limbs..]);
+        let c0 = FqTarget::from_slice(&value[0..num_limbs]);
+        let c1 = FqTarget::from_slice(&value[num_limbs..]);
         Self::from_value(&c0, &c1)
     }
 
     pub fn from_single(value: Target) -> Self {
         let c0 = FqTarget::from_single(value);
-        let c1 = FqTarget::from_vec(&[]);
+        let c1 = FqTarget::from_slice(&[]);
         Self::from_value(&c0, &c1)
     }
 
