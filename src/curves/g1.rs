@@ -222,7 +222,7 @@ mod tests {
     fn g1_recover_from_x() {
         let rng = &mut rand::thread_rng();
         let inputs = (0..1 << 7).map(|_| Fq::rand(rng)).collect::<Vec<_>>();
-        let is_recoverables = inputs
+        let is_recoverable_keys = inputs
             .iter()
             .map(|x| G1Affine::is_recoverable_from_x(*x))
             .collect::<Vec<_>>();
@@ -244,13 +244,13 @@ mod tests {
             .iter()
             .map(|input| FqTarget::constant(&mut builder, input))
             .collect::<Vec<_>>();
-        let is_recoverables_t = inputs_t
+        let is_recoverable_keys_t = inputs_t
             .iter()
             .map(|input| G1Target::is_recoverable_from_x::<C>(&mut builder, input))
             .collect::<Vec<_>>();
         let outputs_t = inputs_t
             .iter()
-            .zip(is_recoverables.iter())
+            .zip(is_recoverable_keys.iter())
             .map(|(input, is_recoverable)| {
                 if *is_recoverable {
                     Some(G1Target::recover_from_x(&mut builder, input))
@@ -260,7 +260,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let mut pw = PartialWitness::new();
-        for (t, w) in is_recoverables_t.iter().zip(is_recoverables) {
+        for (t, w) in is_recoverable_keys_t.iter().zip(is_recoverable_keys) {
             pw.set_bool_target(*t, w);
         }
         for (t, w) in outputs_t.iter().zip(outputs) {
