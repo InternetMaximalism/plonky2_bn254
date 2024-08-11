@@ -170,17 +170,16 @@ mod tests {
         },
     };
 
+    const D: usize = 2;
+    type C = PoseidonGoldilocksConfig;
+    type F = <C as GenericConfig<D>>::F;
+
     #[test]
     fn builder_bn254_stark() {
         let num_inputs_g1 = 10;
         let num_inputs_g2 = 10;
         let num_inputs_fq = 10;
-
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
         let rng = &mut rand::thread_rng();
-
         let inputs_g1 = (0..num_inputs_g1)
             .map(|_| {
                 let s = random_biguint(rng);
