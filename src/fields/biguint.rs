@@ -98,11 +98,9 @@ pub trait CircuitBuilderBiguint<F: RichField + Extendable<D>, const D: usize> {
         z: &BigUintTarget,
     ) -> BigUintTarget;
 
-    fn div_rem_biguint(
-        &mut self,
-        a: &BigUintTarget,
-        b: &BigUintTarget,
-    ) -> (BigUintTarget, BigUintTarget);
+    /// Returns (a / b, a % b).
+    fn div_rem_biguint(&mut self, a: &BigUintTarget, b: &BigUint)
+        -> (BigUintTarget, BigUintTarget);
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderBiguint<F, D>
@@ -266,8 +264,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderBiguint<F, D>
     fn div_rem_biguint(
         &mut self,
         a: &BigUintTarget,
-        b: &BigUintTarget,
+        b: &BigUint,
     ) -> (BigUintTarget, BigUintTarget) {
+        let b_minus_one = self.constant_biguint(&(b - 1u32));
+        let b = self.constant_biguint(b);
         let a_len = a.limbs.len();
         let b_len = b.limbs.len();
         let div_num_limbs = if b_len > a_len + 1 {
@@ -286,11 +286,11 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderBiguint<F, D>
             _phantom: PhantomData,
         });
 
-        let div_b = self.mul_biguint(&div, b);
+        let div_b = self.mul_biguint(&div, &b);
         let div_b_plus_rem = self.add_biguint(&div_b, &rem);
         self.connect_biguint(a, &div_b_plus_rem);
 
-        let cmp_rem_b = self.cmp_biguint(&rem, b);
+        let cmp_rem_b = self.cmp_biguint(&rem, &b_minus_one);
         self.assert_one(cmp_rem_b.target);
 
         (div, rem)
@@ -518,8 +518,7 @@ mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
         let x = builder.constant_biguint(&x_value);
-        let y = builder.constant_biguint(&y_value);
-        let (div, rem) = builder.div_rem_biguint(&x, &y);
+        let (div, rem) = builder.div_rem_biguint(&x, &y_value);
 
         let expected_div = builder.constant_biguint(&expected_div_value);
         let expected_rem = builder.constant_biguint(&expected_rem_value);
