@@ -39,7 +39,7 @@ pub(crate) fn generate_fq_mul<F: RichField>(
     (c, aux)
 }
 
-/// Evaluate the constraint that the sum of two G1 points is a third G1 point
+/// Evaluate the constraint a * b = c mod modulus
 pub(crate) fn eval_fq_mul<P: PackedField>(
     yield_constr: &mut ConstraintConsumer<P>,
     filter: P,
@@ -56,6 +56,7 @@ pub(crate) fn eval_fq_mul<P: PackedField>(
     eval_modulus_zero(yield_constr, filter, modulus, diff, aux);
 }
 
+/// The circuit version of eval_fq_mul
 pub(crate) fn eval_fq_mul_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     yield_constr: &mut RecursiveConstraintConsumer<F, D>,

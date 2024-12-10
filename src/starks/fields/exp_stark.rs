@@ -84,8 +84,7 @@ impl<F: RichField + Extendable<D>, const D: usize> FqExpStark<F, D> {
         }
     }
 
-    // Generate one set of trace of the scalar multiplication
-    // s*x + offset
+    // Generate one set of trace of the field exponentiation offset*x^s
     // assuming s is 256bit value
     fn generate_one_set(&self, input: &FqExpInput, timestamp: usize) -> Vec<[F; FQ_EXP_VIEW_LEN]> {
         let timestamp = F::from_canonical_usize(timestamp);
@@ -103,7 +102,7 @@ impl<F: RichField + Extendable<D>, const D: usize> FqExpStark<F, D> {
         rows
     }
 
-    /// Generate the first row of the trace for one set of scalar multiplication
+    /// Generate the first row of the trace for one set of field exponentiation
     /// except for range check column
     fn generate_first_row(&self, timestamp: F, s: BigUint, x: Fq) -> FqExpView<F> {
         let round_flags = generate_round_flags::<F>(0, FQ_PERIOD);
@@ -234,7 +233,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for FqExpStark<F,
             local.c,
             local.mul_aux,
         );
-        // first round should be adding
+        // first round should be multiplying
         local
             .is_mul
             .eval_eq(yield_constr, local.round_flags.is_first_round, &P::ONES);

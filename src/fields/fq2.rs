@@ -92,14 +92,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Fq2Target<F, D> {
         Fq2::new(c0, c1)
     }
 
-    /// Same as `new_unchecked` but with limb range checks and the modulus range
-    /// check
     pub fn new_unchecked(builder: &mut CircuitBuilder<F, D>) -> Self {
         let c0 = FqTarget::new_unchecked(builder);
         let c1 = FqTarget::new_unchecked(builder);
         Self::from_value(&c0, &c1)
     }
 
+    /// Same as `new_unchecked` but with limb range checks and the modulus range
+    /// check
     pub fn new_checked(builder: &mut CircuitBuilder<F, D>) -> Self {
         let c0 = FqTarget::new_checked(builder);
         let c1 = FqTarget::new_checked(builder);
