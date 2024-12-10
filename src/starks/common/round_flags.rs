@@ -50,6 +50,12 @@ pub(crate) fn eval_round_flags<P: PackedField>(
     round_flags: RoundFlags<P>,
     next_counter: P,
 ) {
+    // is_first_round = 0 if filter = 0
+    let not_filter = P::ONES - filter;
+    yield_constr.constraint(not_filter * round_flags.is_first_round);
+    // is_last_round = 0 if filter = 0
+    yield_constr.constraint(not_filter * round_flags.is_last_round);
+
     // counter * first_round_aux = 1 - is_first_round
     let is_first_round_minus_one = P::ONES - round_flags.is_first_round;
     yield_constr.constraint(
@@ -82,8 +88,18 @@ pub(crate) fn eval_round_flags_circuit<F: RichField + Extendable<D>, const D: us
     round_flags: RoundFlags<ExtensionTarget<D>>,
     next_counter: ExtensionTarget<D>,
 ) {
-    // counter * first_round_aux = 1 - is_first_round
     let one = builder.constant_extension(F::Extension::ONE);
+
+    // is_first_round = 0 if filter = 0
+    let not_fitler = builder.sub_extension(one, filter);
+    let first_round_not_filter = builder.mul_extension(not_fitler, round_flags.is_first_round);
+    yield_constr.constraint(builder, first_round_not_filter);
+
+    // is_last_round = 0 if filter = 0
+    let last_round_not_filter = builder.mul_extension(not_fitler, round_flags.is_last_round);
+    yield_constr.constraint(builder, last_round_not_filter);
+
+    // counter * first_round_aux = 1 - is_first_round
     let is_first_round_minus_one = builder.sub_extension(one, round_flags.is_first_round);
     let t = builder.mul_sub_extension(
         round_flags.counter,
