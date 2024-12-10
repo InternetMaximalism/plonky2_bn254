@@ -214,10 +214,11 @@ impl<F: RichField + Extendable<D>, const D: usize> G2ScalarMulStark<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G2ScalarMulStark<F, D> {
-    type EvaluationFrame<FE, P, const D2: usize> = StarkFrame<P, P::Scalar, G2_SCALAR_MUL_VIEW_LEN, 0>
-        where
-            FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
-            P: plonky2::field::packed::PackedField<Scalar = FE>;
+    type EvaluationFrame<FE, P, const D2: usize>
+        = StarkFrame<P, P::Scalar, G2_SCALAR_MUL_VIEW_LEN, 0>
+    where
+        FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
+        P: plonky2::field::packed::PackedField<Scalar = FE>;
 
     type EvaluationFrameTarget =
         StarkFrame<ExtensionTarget<D>, ExtensionTarget<D>, G2_SCALAR_MUL_VIEW_LEN, 0>;
@@ -254,6 +255,17 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G2ScalarMulSt
         local
             .is_adding
             .eval_eq(yield_constr, local.round_flags.is_first_round, &P::ONES);
+        // double of first round is b
+        local
+            .double
+            .eval_eq(yield_constr, local.round_flags.is_first_round, &local.b);
+        // sum of first round is either c if bit0 is 1 or a if bit0 is 0
+        let first_round_bit0 = local.bits[0] * local.round_flags.is_first_round;
+        let first_round_not_bit0 = (P::ONES - local.bits[0]) * local.round_flags.is_first_round;
+        local.sum.eval_eq(yield_constr, first_round_bit0, &local.c);
+        local
+            .sum
+            .eval_eq(yield_constr, first_round_not_bit0, &local.a);
 
         // doubling_step -> addition_step
         next.a
@@ -363,6 +375,26 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for G2ScalarMulSt
             local.round_flags.is_first_round,
             &one,
         );
+        
+        // double of first round is b
+        local.double.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.round_flags.is_first_round,
+            &local.b,
+        );
+        // sum of first round is either a or c
+        let first_round_bit0 =
+            builder.mul_extension(local.bits[0], local.round_flags.is_first_round);
+        let not_bit0 = builder.sub_extension(one, local.bits[0]);
+        let first_round_not_bit0 =
+            builder.mul_extension(not_bit0, local.round_flags.is_first_round);
+        local
+            .sum
+            .eval_eq_circuit(builder, yield_constr, first_round_bit0, &local.c);
+        local
+            .sum
+            .eval_eq_circuit(builder, yield_constr, first_round_not_bit0, &local.a);
 
         // doubling_step -> addition_step
         next.a.eval_eq_circuit(
