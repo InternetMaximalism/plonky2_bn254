@@ -197,10 +197,11 @@ impl<F: RichField + Extendable<D>, const D: usize> FqExpStark<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for FqExpStark<F, D> {
-    type EvaluationFrame<FE, P, const D2: usize> = StarkFrame<P, P::Scalar, FQ_EXP_VIEW_LEN, 0>
-        where
-            FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
-            P: plonky2::field::packed::PackedField<Scalar = FE>;
+    type EvaluationFrame<FE, P, const D2: usize>
+        = StarkFrame<P, P::Scalar, FQ_EXP_VIEW_LEN, 0>
+    where
+        FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
+        P: plonky2::field::packed::PackedField<Scalar = FE>;
 
     type EvaluationFrameTarget =
         StarkFrame<ExtensionTarget<D>, ExtensionTarget<D>, FQ_EXP_VIEW_LEN, 0>;
@@ -237,6 +238,21 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for FqExpStark<F,
         local
             .is_mul
             .eval_eq(yield_constr, local.round_flags.is_first_round, &P::ONES);
+
+        // square of first round is b
+        local
+            .square
+            .eval_eq(yield_constr, local.round_flags.is_first_round, &local.b);
+        // product of first round is either c if bit0 is 1 or a if bit0 is 0
+        let first_round_bit0 = local.bits[0] * local.round_flags.is_first_round;
+        let first_round_not_bit0 = (P::ONES - local.bits[0]) * local.round_flags.is_first_round;
+        local
+            .product
+            .eval_eq(yield_constr, first_round_bit0, &local.c);
+        local
+            .product
+            .eval_eq(yield_constr, first_round_not_bit0, &local.a);
+
         // first round, a = 1
         let mut one = U256::<P>::default();
         one.value[0] = P::ONES;
@@ -348,6 +364,26 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for FqExpStark<F,
             local.round_flags.is_first_round,
             &one,
         );
+        // square of first round is b
+        local.square.eval_eq_circuit(
+            builder,
+            yield_constr,
+            local.round_flags.is_first_round,
+            &local.b,
+        );
+        // product of first round is either c if bit0 is 1 or a if bit0 is 0
+        let first_round_bit0 =
+            builder.mul_extension(local.bits[0], local.round_flags.is_first_round);
+        let not_bit0 = builder.sub_extension(one, local.bits[0]);
+        let first_round_not_bit0 =
+            builder.mul_extension(not_bit0, local.round_flags.is_first_round);
+        local
+            .product
+            .eval_eq_circuit(builder, yield_constr, first_round_bit0, &local.c);
+        local
+            .product
+            .eval_eq_circuit(builder, yield_constr, first_round_not_bit0, &local.a);
+
         // first round, a = 1
         let zero = builder.zero_extension();
         let one = builder.one_extension();
