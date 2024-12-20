@@ -130,21 +130,21 @@ impl<F: RichField + Extendable<D>, const D: usize> Fq2Target<F, D> {
     pub fn add(&self, builder: &mut CircuitBuilder<F, D>, other: &Self) -> Self {
         let c0 = self.c0.add(builder, &other.c0);
         let c1 = self.c1.add(builder, &other.c1);
-        Self::from_value(&c0, &c1)
+        Self::from_value(&c0, &c1).take_mod(builder)
     }
 
     /// Take the negative as an element of the field
     pub fn neg(&self, builder: &mut CircuitBuilder<F, D>) -> Self {
         let c0_neg = self.c0.neg(builder);
         let c1_neg = self.c1.neg(builder);
-        Self::from_value(&c0_neg, &c1_neg)
+        Self::from_value(&c0_neg, &c1_neg).take_mod(builder)
     }
 
     /// Subtract two elements without taking the modulus
     pub fn sub(&self, builder: &mut CircuitBuilder<F, D>, other: &Self) -> Self {
         let c0_sub = self.c0.sub(builder, &other.c0);
         let c1_sub = self.c1.sub(builder, &other.c1);
-        Self::from_value(&c0_sub, &c1_sub)
+        Self::from_value(&c0_sub, &c1_sub).take_mod(builder)
     }
 
     /// Multiply an element by a constant u32 without taking the modulus
@@ -162,7 +162,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Fq2Target<F, D> {
         let c01 = self.c0.mul(builder, &other.c1);
         let c0 = c00.sub(builder, &c11);
         let c1 = c10.add(builder, &c01);
-        Self::from_value(&c0, &c1)
+        Self::from_value(&c0, &c1).take_mod(builder)
     }
 
     pub fn is_equal(&self, builder: &mut CircuitBuilder<F, D>, other: &Self) -> BoolTarget {
