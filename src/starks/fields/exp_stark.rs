@@ -84,7 +84,7 @@ impl<F: RichField + Extendable<D>, const D: usize> FqExpStark<F, D> {
         }
     }
 
-    // Generate one set of trace of the field exponentiation offset*x^s
+    // Generate one set of trace of the field exponentiation x^s
     // assuming s is 256bit value
     fn generate_one_set(&self, input: &FqExpInput, timestamp: usize) -> Vec<[F; FQ_EXP_VIEW_LEN]> {
         let timestamp = F::from_canonical_usize(timestamp);
