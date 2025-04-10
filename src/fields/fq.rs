@@ -151,8 +151,7 @@ impl<F: RichField + Extendable<D>, const D: usize> FqTarget<F, D> {
         if self.mod_taken {
             return self.clone();
         }
-        let modulus = self.modulus_target(builder);
-        let (_div, rem) = builder.div_rem_biguint(&self.value(), &modulus);
+        let (_div, rem) = builder.div_rem_biguint(&self.value(), &self.modulus());
         Self::from_value(&rem, true).pad(builder)
     }
 
