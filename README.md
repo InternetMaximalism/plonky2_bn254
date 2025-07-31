@@ -206,7 +206,7 @@ let g2_point = G2Target::map_to_g2_circuit::<C>(&mut builder, &input);
 Run tests with:
 
 ```bash
-cargo test
+cargo test -r
 ```
 
 ## License
