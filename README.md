@@ -15,6 +15,11 @@ This library extends Plonky2 with STARK implementations for BN254 elliptic curve
 - Field arithmetic for Fq and Fq2
 - Hash-to-curve functionality for G2
 - Integration with Plonky2 circuit builders
+- Hook functionality for introducing additional constraints during circuit build time
+
+## Hook Functionality
+
+The Hook system allows for the introduction of additional constraints during the circuit building process. This is a forked feature from the original plonky2 implementation that enables more flexible constraint management and STARK proof integration.
 
 ## Architecture
 
