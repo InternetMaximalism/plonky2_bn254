@@ -170,7 +170,16 @@ where
             &extra_looking_values,
         )
         .unwrap();
-        set_stark_proof_target(out_buffer, &self.stark_proof, &stark_proof.proof, self.zero);
+        // plonky2 1.x: set_stark_proof_target now takes the proof's degree_bits
+        // and returns Result.
+        let degree_bits = stark_proof.proof.recover_degree_bits(&config);
+        set_stark_proof_target(
+            out_buffer,
+            &self.stark_proof,
+            &stark_proof.proof,
+            degree_bits,
+            self.zero,
+        )?;
         set_ctl_values_target(
             out_buffer,
             &self.extra_looking_values,

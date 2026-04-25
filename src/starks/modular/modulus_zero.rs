@@ -306,19 +306,30 @@ mod tests {
         let config = StarkConfig::standard_fast_config();
         let trace = stark.generate_trace(&input, 8);
         let mut timing = TimingTree::default();
-        let proof =
-            starky::prover::prove::<F, C, _, D>(stark, &config, trace, &[], &mut timing).unwrap();
-        starky::verifier::verify_stark_proof(stark, proof.clone(), &config).unwrap();
+        // plonky2 1.x: prove/verify_stark_proof gained a verifier_circuit_fri_params arg.
+        let proof = starky::prover::prove::<F, C, _, D>(
+            stark, &config, trace, &[], None, &mut timing,
+        )
+        .unwrap();
+        starky::verifier::verify_stark_proof(stark, proof.clone(), &config, None).unwrap();
 
         let circuit_config = CircuitConfig::default();
         let mut builder = CircuitBuilder::<F, D>::new(circuit_config);
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let proof_t =
             add_virtual_stark_proof_with_pis(&mut builder, &stark, &config, degree_bits, 0, 0);
-        verify_stark_proof_circuit::<F, C, _, D>(&mut builder, stark, proof_t.clone(), &config);
+        // plonky2 1.x: verify_stark_proof_circuit gained min_degree_bits_to_support arg.
+        verify_stark_proof_circuit::<F, C, _, D>(
+            &mut builder,
+            stark,
+            proof_t.clone(),
+            &config,
+            None,
+        );
         let zero = builder.zero();
         let mut pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut pw, &proof_t, &proof, zero);
+        // plonky2 1.x: set_stark_proof_with_pis_target now takes pis_degree_bits and returns Result.
+        set_stark_proof_with_pis_target(&mut pw, &proof_t, &proof, degree_bits, zero).unwrap();
         let circuit = builder.build::<C>();
         let circuit_proof = circuit.prove(pw).unwrap();
         assert!(circuit.verify(circuit_proof).is_ok());

@@ -608,7 +608,8 @@ mod tests {
         );
         let zero = builder.zero();
         let mut pw = PartialWitness::new();
-        set_stark_proof_target(&mut pw, &proof_t.proof, &proof.proof, zero);
+        // plonky2 1.x: set_stark_proof_target now takes the proof's degree_bits.
+        set_stark_proof_target(&mut pw, &proof_t.proof, &proof.proof, degree_bits, zero).unwrap();
         set_ctl_values_target(&mut pw, &ctl_values_t, &ctl_values);
         let circuit = builder.build::<C>();
         let circuit_proof = timed!(timing, "circuit prove", circuit.prove(pw).unwrap());
