@@ -29,10 +29,11 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
         Vec::new()
     }
 
-    fn run_once(&self, _pw: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, _pw: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> anyhow::Result<()> {
         let random = G2Affine::rand(&mut rand::thread_rng());
         self.target.set_witness(out_buffer, &random);
-    }
+            Ok(())
+}
 
     fn serialize(
         &self,

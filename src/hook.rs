@@ -53,6 +53,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F> + 'static, const D
 where
     <C as GenericConfig<D>>::Hasher: AlgebraicHasher<F>,
 {
+    #[cfg(not(feature = "not-constrain-bn254-stark"))]
     fn constrain(&self, builder: &mut CircuitBuilder<F, D>) {
         use crate::generators::{
             fq::stark_proof::FqStarkProofGenerator, g1::stark_proof::G1StarkProofGenerator,

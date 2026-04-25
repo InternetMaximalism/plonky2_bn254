@@ -17,6 +17,7 @@ use super::to_u16::ToU16;
 
 pub mod random;
 pub mod single;
+#[cfg(not(feature = "not-constrain-bn254-stark"))]
 pub mod stark_proof;
 #[derive(Clone, Debug)]
 pub struct G2ScalarMulInputTarget<F: RichField + Extendable<D>, const D: usize> {

@@ -254,14 +254,15 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
         self.x.to_vec()
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> anyhow::Result<()> {
         let x = self.x.get_witness(witness);
         let inv_x: Fq2 = match x.inverse() {
             Some(inv_x) => inv_x,
             None => Fq2::zero(),
         };
         self.inv.set_witness(out_buffer, &inv_x);
-    }
+            Ok(())
+}
 
     fn id(&self) -> std::string::String {
         "Fq2InverseGenerator".to_string()
@@ -302,7 +303,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
         x_vec
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> anyhow::Result<()> {
         let x = self.x.get_witness(witness);
         let sgn = witness.get_target(self.sgn.target).is_one(); // convert 1 => true, 0 => false
         let mut sqrt_x: Fq2 = x.sqrt().expect("Fq2 sqrt failed");
@@ -310,7 +311,8 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
             sqrt_x = -sqrt_x;
         }
         self.sqrt.set_witness(out_buffer, &sqrt_x);
-    }
+            Ok(())
+}
 
     fn id(&self) -> std::string::String {
         "Fq2SqrtGenerator".to_string()

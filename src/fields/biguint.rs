@@ -336,14 +336,15 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
             .collect()
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> anyhow::Result<()> {
         let a = self.a.get_witness(witness);
         let b = self.b.get_witness(witness);
         let (div, rem) = a.div_rem(&b);
 
         self.div.set_witness(out_buffer, &div);
         self.rem.set_witness(out_buffer, &rem);
-    }
+            Ok(())
+}
 
     fn id(&self) -> String {
         unimplemented!()

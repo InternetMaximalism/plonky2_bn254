@@ -44,11 +44,12 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
             .collect()
     }
 
-    fn run_once(&self, pw: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, pw: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> anyhow::Result<()> {
         let input = self.input.get_witness(pw);
         let output: Fq = input.x.pow(input.s.to_u64_digits());
         self.output.set_witness(out_buffer, &output);
-    }
+            Ok(())
+}
 
     fn serialize(
         &self,

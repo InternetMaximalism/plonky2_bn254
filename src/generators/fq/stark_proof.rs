@@ -132,7 +132,7 @@ where
             .collect()
     }
 
-    fn run_once(&self, pw: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, pw: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> anyhow::Result<()> {
         let inputs = self
             .inputs
             .iter()
@@ -175,7 +175,8 @@ where
             &self.extra_looking_values,
             &extra_looking_values,
         );
-    }
+            Ok(())
+}
 
     fn serialize(
         &self,

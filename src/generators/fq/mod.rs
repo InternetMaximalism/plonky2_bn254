@@ -16,6 +16,7 @@ use crate::{
 use super::to_u16::ToU16;
 
 pub mod single;
+#[cfg(not(feature = "not-constrain-bn254-stark"))]
 pub mod stark_proof;
 
 #[derive(Clone, Debug)]
